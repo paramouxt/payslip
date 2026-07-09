@@ -31,7 +31,7 @@ mailbox **push to us**:
 - Apps Script running against its owner’s own account requires **no OAuth app, no
   verification, no stored credentials**, and consumer accounts get ~90 min/day of
   trigger runtime — hundreds of times more than needed.
-- Security posture *improves*: the platform never holds Gmail credentials at all. A
+- Security posture _improves_: the platform never holds Gmail credentials at all. A
   full database breach yields zero mailbox access. Least privilege in the strongest
   sense — we have no privilege.
 
@@ -47,12 +47,12 @@ onboarding cost later.
 
 **Challenge:** Email parsing of employer-generated formats has a 100% probability of
 eventually failing: templates change, a coordinator sends a one-off “can you cover
-Saturday?” email, a rota arrives as a screenshot. A system *pretending* to be fully
+Saturday?” email, a rota arrives as a screenshot. A system _pretending_ to be fully
 automatic fails silently — which, in a payroll product, means quietly wrong money.
 That is the single worst failure mode available to us.
 
 **Resolution:** Automation with a visible safety net. Every email is archived
-immutably *before* parsing; anything unparseable lands in a **quarantine queue** in
+immutably _before_ parsing; anything unparseable lands in a **quarantine queue** in
 the UI with the original rendered alongside a manual-entry form; every manual
 resolution is captured as a candidate parser fixture, so the parser learns (in the
 engineering sense) from every failure. The manual paths (add/edit shift) are
@@ -64,7 +64,7 @@ include “manually overridden to Reserved Parking”, which proves the need.
 **Assumption:** The app can “calculate” tax from shifts alone.
 
 **Challenge:** UK PAYE is **cumulative**: this fortnight’s tax depends on year-to-date
-pay and tax across *all* payrolls under that employment, the tax code basis, and
+pay and tax across _all_ payrolls under that employment, the tax code basis, and
 rounding done by the employer’s payroll software. Computing from our shift data alone
 diverges as soon as reality deviates (an adjustment, a bonus, a mid-year code
 change). Also: presenting figures as authoritative tax calculations is a regulatory
@@ -87,8 +87,8 @@ limits make it worse). Self-hosting a socket server violates £0/month.
 **Resolution:** **Supabase Realtime** (included in the free tier we already use for
 Postgres + Storage): the server broadcasts on a per-user channel after ingestion
 writes; the dashboard subscribes over Supabase’s managed WebSocket. Fallback is SWR
-revalidation-on-focus + gentle polling. We keep the brief’s *outcome* (live feel) and
-drop its *mechanism* (owning connections on a serverless host).
+revalidation-on-focus + gentle polling. We keep the brief’s _outcome_ (live feel) and
+drop its _mechanism_ (owning connections on a serverless host).
 
 ## 5. Vercel cron cannot be the scheduler backbone — and doesn’t need to be
 
@@ -111,6 +111,7 @@ free tiers comfortably. Design rule: **nothing depends on precise scheduling.**
 **Assumption:** “Free forever” is a deployment choice.
 
 **Challenge:** It’s an architectural constraint with specific failure modes:
+
 - **Supabase free pauses projects after 7 days of database inactivity** (90-day
   restore window). A quiet week = dead app.
 - Vercel Hobby is **non-commercial**; the moment this becomes a paid SaaS, Pro
@@ -149,7 +150,7 @@ emails with new parsers**. If parse-time interpretation is all you kept, you can
 
 **Resolution:** Ingestion permanently archives the **raw MIME message** (and
 attachments) in our own storage before any interpretation. Parsed data is always a
-*derived projection* that can be rebuilt (`reprocess(emailId)`); parser version is
+_derived projection_ that can be rebuilt (`reprocess(emailId)`); parser version is
 recorded on every parse. This one decision is what makes the audit trail, fixture
 capture (§2), and future parser migrations possible.
 
@@ -158,16 +159,16 @@ capture (§2), and future parser migrations possible.
 **Assumption (implied):** A shifts table that gets updated when rotas change.
 
 **Challenge:** “Detect rota changes” and “highlight payroll mistakes” are both
-*history* features. If an amendment `UPDATE`s a row, the evidence that Saturday
+_history_ features. If an amendment `UPDATE`s a row, the evidence that Saturday
 moved from 8h to 10h — exactly what you need when disputing pay — is destroyed.
 
-**Resolution:** Event-sourcing *lite*: an append-only `ShiftEvent` stream (created /
+**Resolution:** Event-sourcing _lite_: an append-only `ShiftEvent` stream (created /
 amended / cancelled / manually-edited, each linked to its source email or user
 action) with the `Shift` row as the current-state projection, plus stored diffs.
 Full event-sourcing with replay-only state would be over-engineering; projection +
 immutable log gives the product value at a fraction of the complexity.
 
-## 10. Multi-tenant discipline now; multi-tenant *features* later
+## 10. Multi-tenant discipline now; multi-tenant _features_ later
 
 **Assumption:** “Support multiple users… eventually teams”, alongside a v1 for one
 person.
@@ -176,7 +177,7 @@ person.
 (YAGNI); but retrofitting tenancy onto a single-user schema later is a rewrite.
 These fail in opposite directions.
 
-**Resolution:** Tenancy as *schema discipline*, not features: every domain row has
+**Resolution:** Tenancy as _schema discipline_, not features: every domain row has
 `userId`; every repository method is tenant-scoped by construction (it is not
 possible to call one without a user context); tests assert cross-tenant isolation.
 Zero UI for it. Organisations, roles, and billing arrive as additive layers when
@@ -189,7 +190,7 @@ never until needed).
 **Assumption (implied):** Tax/NI/pension are formulas to implement.
 
 **Challenge:** They are **tables that change every tax year** plus calculation
-*methods* that differ by pay frequency (NI uses per-period thresholds — a fortnightly
+_methods_ that differ by pay frequency (NI uses per-period thresholds — a fortnightly
 payroll uses 2× weekly thresholds; PAYE uses cumulative allowance apportionment) and
 by employer payroll software rounding conventions. Hardcoding any of it means an
 April maintenance emergency every year.

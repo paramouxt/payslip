@@ -1,6 +1,8 @@
 # Phase 4 — Architecture
 
-**Status:** Proposed — awaiting approval before Phase 5 (database implementation).
+**Status:** Approved (v1.1) — with the refinements recorded in §14. Phase 5 in
+progress. Where §14 amends an earlier section, §14 wins; from Phase 5 onward the
+code in this repository is the authoritative schema.
 
 ---
 
@@ -62,10 +64,11 @@ src/components→ Cross-feature design system (shadcn/ui primitives + composites
 Dependency rule enforced with ESLint (`import/no-restricted-paths`): `core` imports
 nothing; `server` never imports `app`/`features`; UI never imports Prisma. This is
 the honest version of Clean Architecture for a Next.js monolith — layers as folders
-+ lint-enforced direction, no ceremony of one-interface-per-class. Repositories are
-interfaces in `server/repositories` with Prisma implementations; services receive
-dependencies via constructor injection (hand-rolled composition root in
-`server/container.ts`, no DI framework).
+
+- lint-enforced direction, no ceremony of one-interface-per-class. Repositories are
+  interfaces in `server/repositories` with Prisma implementations; services receive
+  dependencies via constructor injection (hand-rolled composition root in
+  `server/container.ts`, no DI framework).
 
 ## 3. Folder structure
 
@@ -248,9 +251,10 @@ model IngestionSecret { id, userId, secretHash, label, createdAt, lastUsedAt?, r
 ```
 
 Notes:
+
 - **Auth tables** (Auth.js Prisma adapter: Account/Session/VerificationToken) are
   separate from domain tables.
-- **Why JSONB for rules/components/lines:** these are *documents* — versioned,
+- **Why JSONB for rules/components/lines:** these are _documents_ — versioned,
   schema-validated (zod), read whole, never joined against. Relational explosion
   (RuleConditionRow…) would multiply migrations for zero query value. Fields we
   filter/aggregate on (dates, money totals, statuses, tenant keys) are proper
@@ -278,7 +282,7 @@ receive → verify HMAC(+timestamp, replay window) → dedupe (dedupeKey)
 ```
 
 - **Apps Script contract:** POST JSON `{messageId, receivedAt, headers, raw (base64,
-  size-capped), attachments[]}` signed with `HMAC-SHA256(secret, timestamp‖body)`;
+size-capped), attachments[]}` signed with `HMAC-SHA256(secret, timestamp‖body)`;
   script labels the Gmail thread `payslip/synced` only on 2xx — so state lives in
   Gmail and retries are automatic. Oversized payloads send metadata only and are
   fetched via the daily sweep’s re-request path.
@@ -297,10 +301,17 @@ Facts derived from the shift: `dayOfWeek`, `scheduledHours`, `role`, `venue`,
 `isOverridden`, … Condition DSL (closed grammar, zod-validated):
 
 ```json
-{ "priority": 10, "name": "Sunday hands-free uplift",
-  "when": { "all": [ {"fact":"role","op":"eq","value":"hands-free"},
-                      {"fact":"dayOfWeek","op":"eq","value":"SUN"} ] },
-  "then": { "assignRateClass": "reserved-parking" } }
+{
+  "priority": 10,
+  "name": "Sunday hands-free uplift",
+  "when": {
+    "all": [
+      { "fact": "role", "op": "eq", "value": "hands-free" },
+      { "fact": "dayOfWeek", "op": "eq", "value": "SUN" }
+    ]
+  },
+  "then": { "assignRateClass": "reserved-parking" }
+}
 ```
 
 Precedence: manual override → first matching rule by priority → role default.
@@ -326,11 +337,11 @@ tax-year (6 Apr–5 Apr) helpers live here too.
 Mutations use **server actions** (typed, colocated, CSRF-safe); route handlers exist
 only where a non-browser caller needs a URL:
 
-| Route | Auth | Purpose |
-| --- | --- | --- |
-| `POST /api/ingest/email` | HMAC + timestamp | Apps Script push |
-| `POST /api/cron/daily` | `CRON_SECRET` header | keep-alive, sweep, forecasts |
-| `GET/POST /api/auth/[...nextauth]` | — | Auth.js (Google, basic scopes only) |
+| Route                              | Auth                 | Purpose                             |
+| ---------------------------------- | -------------------- | ----------------------------------- |
+| `POST /api/ingest/email`           | HMAC + timestamp     | Apps Script push                    |
+| `POST /api/cron/daily`             | `CRON_SECRET` header | keep-alive, sweep, forecasts        |
+| `GET/POST /api/auth/[...nextauth]` | —                    | Auth.js (Google, basic scopes only) |
 
 Server actions (representative): `connectMailbox` / `rotateIngestionSecret`,
 `saveEmployer`, `saveRuleSet` (+ `testRuleSet(sampleShifts)`), `saveTaxProfile`,
@@ -390,31 +401,31 @@ shadcn/ui theming; dark/light via `prefers-color-scheme` + toggle.
 
 ## 10. Testing strategy
 
-| Layer | Tool | What |
-| --- | --- | --- |
-| core/money, periods | Vitest + fast-check | rounding properties, DST cases, period math incl. April 2026 transition |
-| core/payroll | Vitest golden fixtures | Tracsis scenarios: Sunday rule, 10-hour rule, override precedence, rate-version boundaries |
-| core/statutory | Vitest | HMRC worked examples per tax year; cumulative vs W1/M1; NI per-period |
-| core/parsing | Vitest fixture corpus | every real (anonymised) email ever quarantined or parsed; parser-version regression |
-| core/reconciliation | Vitest | tolerance model, discrepancy classification |
-| server | Vitest integration vs real Postgres (CI service container) | pipeline idempotency (same email twice), tenant isolation, checkpoint/resume |
-| e2e | Playwright | auth, ingest-to-dashboard happy path (simulated push), quarantine resolve, rule editing |
-| CI | GitHub Actions | lint → typecheck → unit → integration → e2e → build; Husky pre-commit lint-staged |
+| Layer               | Tool                                                       | What                                                                                       |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| core/money, periods | Vitest + fast-check                                        | rounding properties, DST cases, period math incl. April 2026 transition                    |
+| core/payroll        | Vitest golden fixtures                                     | Tracsis scenarios: Sunday rule, 10-hour rule, override precedence, rate-version boundaries |
+| core/statutory      | Vitest                                                     | HMRC worked examples per tax year; cumulative vs W1/M1; NI per-period                      |
+| core/parsing        | Vitest fixture corpus                                      | every real (anonymised) email ever quarantined or parsed; parser-version regression        |
+| core/reconciliation | Vitest                                                     | tolerance model, discrepancy classification                                                |
+| server              | Vitest integration vs real Postgres (CI service container) | pipeline idempotency (same email twice), tenant isolation, checkpoint/resume               |
+| e2e                 | Playwright                                                 | auth, ingest-to-dashboard happy path (simulated push), quarantine resolve, rule editing    |
+| CI                  | GitHub Actions                                             | lint → typecheck → unit → integration → e2e → build; Husky pre-commit lint-staged          |
 
 The pyramid is deliberately bottom-heavy: the product’s value is in the engines,
 and they are pure functions — cheap to test exhaustively.
 
 ## 11. Cost model (the £0 audit)
 
-| Service | Free limit (checked Jul 2026) | Our usage (1 user) | First paid trigger |
-| --- | --- | --- | --- |
-| Vercel Hobby | non-commercial; daily-only crons; 100GB bandwidth | tiny; 1 daily cron | going commercial → Pro ~$20/mo |
-| Supabase Free | 500MB DB, 1GB storage, Realtime incl., **pauses after 7 idle days** | MBs of rows; ~100KB/payslip | ~2 yrs of raw email at worst; Pro $25/mo |
-| Apps Script | consumer quotas ≫ need (~90 min triggers/day) | seconds/day | effectively never |
-| Auth.js + Google sign-in | free, basic scopes | 1 user | never (verification only if SaaS) |
-| GitHub Free + Actions | 2000 CI min/mo private | ~200 min/mo | public repo ⇒ unlimited |
-| Sentry / PostHog | 5k errors / 1M events mo | trivial | not before real traffic |
-| Web Push (VAPID) | free protocol | trivial | never |
+| Service                  | Free limit (checked Jul 2026)                                       | Our usage (1 user)          | First paid trigger                       |
+| ------------------------ | ------------------------------------------------------------------- | --------------------------- | ---------------------------------------- |
+| Vercel Hobby             | non-commercial; daily-only crons; 100GB bandwidth                   | tiny; 1 daily cron          | going commercial → Pro ~$20/mo           |
+| Supabase Free            | 500MB DB, 1GB storage, Realtime incl., **pauses after 7 idle days** | MBs of rows; ~100KB/payslip | ~2 yrs of raw email at worst; Pro $25/mo |
+| Apps Script              | consumer quotas ≫ need (~90 min triggers/day)                       | seconds/day                 | effectively never                        |
+| Auth.js + Google sign-in | free, basic scopes                                                  | 1 user                      | never (verification only if SaaS)        |
+| GitHub Free + Actions    | 2000 CI min/mo private                                              | ~200 min/mo                 | public repo ⇒ unlimited                  |
+| Sentry / PostHog         | 5k errors / 1M events mo                                            | trivial                     | not before real traffic                  |
+| Web Push (VAPID)         | free protocol                                                       | trivial                     | never                                    |
 
 Mitigations wired into the design: daily keep-alive (pause risk), storage in
 Storage-not-Postgres (500MB), nothing schedule-precise (cron limits), and full
@@ -422,34 +433,139 @@ portability (plain Postgres + S3-style storage) if any tier turns hostile.
 
 ## 12. Delivery plan (maps to your Phases 5–12)
 
-| Phase | Deliverable | Definition of done |
-| --- | --- | --- |
-| 5 Database | Prisma schema, migrations, seeds (statutory 25-26/26-27, Tracsis template), repository layer | migrations apply cleanly; tenant-isolation tests green |
-| 6 Auth | Auth.js Google sign-in, app shell, protected routes | sign-in/out; sessions revocable |
-| 7 Ingestion | Ingest endpoint, Apps Script generator + setup UI, archive/classify/parse (needs your sample emails), quarantine UI, backfill | real rota email → shifts in DB ≤ 90s; replay idempotent |
-| 8 Payroll | Rules engine, period math, statutory UK, ExpectedPay projections, reconciliation + discrepancies | Tracsis fixture periods match real payslips to the penny |
-| 9 Dashboard | All FR-7 views, explanation trees, what-if panel, Realtime | live update on ingest; a11y pass |
-| 10 Notifications | In-app + Web Push, semantic diff content, system health card | push received on rota change |
-| 11 Testing | Full pyramid to target coverage, fixture corpus tooling | CI green, mutation-spot-checks on engines |
-| 12 Deployment | Vercel + Supabase provisioning docs, env validation, Sentry, runbook | cold deploy from README in <30 min |
+| Phase            | Deliverable                                                                                                                   | Definition of done                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 5 Database       | Prisma schema, migrations, seeds (statutory 25-26/26-27, Tracsis template), repository layer                                  | migrations apply cleanly; tenant-isolation tests green   |
+| 6 Auth           | Auth.js Google sign-in, app shell, protected routes                                                                           | sign-in/out; sessions revocable                          |
+| 7 Ingestion      | Ingest endpoint, Apps Script generator + setup UI, archive/classify/parse (needs your sample emails), quarantine UI, backfill | real rota email → shifts in DB ≤ 90s; replay idempotent  |
+| 8 Payroll        | Rules engine, period math, statutory UK, ExpectedPay projections, reconciliation + discrepancies                              | Tracsis fixture periods match real payslips to the penny |
+| 9 Dashboard      | All FR-7 views, explanation trees, what-if panel, Realtime                                                                    | live update on ingest; a11y pass                         |
+| 10 Notifications | In-app + Web Push, semantic diff content, system health card                                                                  | push received on rota change                             |
+| 11 Testing       | Full pyramid to target coverage, fixture corpus tooling                                                                       | CI green, mutation-spot-checks on engines                |
+| 12 Deployment    | Vercel + Supabase provisioning docs, env validation, Sentry, runbook                                                          | cold deploy from README in <30 min                       |
 
 ## 13. Decision log (ADR summary)
 
-| # | Decision | Alternatives rejected | Why |
-| --- | --- | --- | --- |
-| 1 | Apps Script push ingestion (v1) | Gmail API OAuth (7-day token death / CASA wall); IMAP app-password (stores full-mailbox credential; polling) | free, live, zero stored credentials |
-| 2 | Supabase (DB+Storage+Realtime) | Neon (no storage/realtime), Postgres+S3 mix | one free service, three needs; plain-Postgres portability kept |
-| 3 | Supabase Realtime for liveness | SSE/WS on Vercel | serverless-hostile connections avoided |
-| 4 | Event log + projection for shifts | CRUD updates; full ES/CQRS | history is the product; replay-only ES is overkill |
-| 5 | Raw-first email archiving | parse-and-discard | reprocessability, evidence, fixtures |
-| 6 | Closed JSON rule DSL | expression language; hardcoded rules | expressive enough, injectable never |
-| 7 | Statutory tables as seeded data | constants in code | April is a data update, not a release |
-| 8 | Integer pence + explicit rounding config | floats; implicit rounding | payslip-grade correctness |
-| 9 | Server actions + minimal route handlers | tRPC/GraphQL | one app, no API consumers yet |
-| 10 | Tenancy as schema discipline only (v1) | full org/RBAC now; single-user schema | avoids both rewrite and YAGNI |
+| #   | Decision                                 | Alternatives rejected                                                                                        | Why                                                            |
+| --- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 1   | Apps Script push ingestion (v1)          | Gmail API OAuth (7-day token death / CASA wall); IMAP app-password (stores full-mailbox credential; polling) | free, live, zero stored credentials                            |
+| 2   | Supabase (DB+Storage+Realtime)           | Neon (no storage/realtime), Postgres+S3 mix                                                                  | one free service, three needs; plain-Postgres portability kept |
+| 3   | Supabase Realtime for liveness           | SSE/WS on Vercel                                                                                             | serverless-hostile connections avoided                         |
+| 4   | Event log + projection for shifts        | CRUD updates; full ES/CQRS                                                                                   | history is the product; replay-only ES is overkill             |
+| 5   | Raw-first email archiving                | parse-and-discard                                                                                            | reprocessability, evidence, fixtures                           |
+| 6   | Closed JSON rule DSL                     | expression language; hardcoded rules                                                                         | expressive enough, injectable never                            |
+| 7   | Statutory tables as seeded data          | constants in code                                                                                            | April is a data update, not a release                          |
+| 8   | Integer pence + explicit rounding config | floats; implicit rounding                                                                                    | payslip-grade correctness                                      |
+| 9   | Server actions + minimal route handlers  | tRPC/GraphQL                                                                                                 | one app, no API consumers yet                                  |
+| 10  | Tenancy as schema discipline only (v1)   | full org/RBAC now; single-user schema                                                                        | avoids both rewrite and YAGNI                                  |
+
+## 14. v1.1 refinements (approved by product owner)
+
+### 14.1 Provider-agnostic email ingestion
+
+The mailbox integration is formalised as a **domain port**, `EmailIngestionProvider`
+(`src/core/ingestion/`). The domain and pipeline know only the port’s types
+(`IncomingEmail`, `IngestionCursor`, verification results) — never a vendor SDK.
+Two provider shapes are modelled explicitly, because they are architecturally
+different:
+
+- **Push providers** (Apps Script forwarder — v1; generic signed webhook): the
+  provider verifies an inbound HTTP request (HMAC, timestamp window) and extracts
+  an `IncomingEmail`.
+- **Pull providers** (Gmail API, IMAP, Microsoft Graph/Outlook — future): the
+  provider is polled with an opaque `cursor` and returns new emails plus the next
+  cursor; credentials handling stays entirely inside the adapter.
+
+A `MailboxConnection` entity (per user, per mailbox) records the provider kind,
+non-secret config, and health state; ingestion secrets/credentials hang off the
+connection, hashed or encrypted. Everything downstream of
+`IngestionService.receive(IncomingEmail)` is provider-blind, so adding Outlook
+later touches zero domain code. ADR 1 stands: Apps Script push is the first
+adapter, not the architecture.
+
+### 14.2 Rich domain model (DDD layering)
+
+The domain layer (`src/core/domain/`) is organised around **entities and value
+objects with behaviour**, not service procedures: `Employer`, `Contract`, `Role`,
+`Shift` (aggregate root over `ShiftEvent`s, enforcing invariants such as
+“cancelled shifts must be reinstated before amendment”), `PayrollPeriod` +
+`PayPeriodScheme` (owning all period math), `Payslip`, `Rule`/`RuleSet` (owning
+`matches(shift)`) with the `RuleEngine` as a domain service, `Money` (integer
+pence + currency + explicit rounding), `EvidencePack`, and `Notification`.
+Services in `src/server` shrink to orchestration: load aggregates → invoke domain
+behaviour → persist → publish.
+
+Two entities are **promoted** relative to §4:
+
+- **`Contract`** — the employment relationship between a user and an employer
+  (start/end dates, encrypted employee reference, optional per-contract pay-period
+  override). `Shift` and `Payslip` now reference a contract; this is what makes
+  multiple concurrent employers (and later, changed terms at the same employer)
+  first-class rather than stringly-typed.
+- **`Role`** — previously a string on `Shift`; now an employer-scoped entity with
+  a default rate class (`Hands-Free` role → `Hands-Free` rates unless a rule or
+  override says otherwise). Rules reference role slugs; the rule DSL is unchanged.
+
+`EvidencePack` also becomes a persisted entity (generated document + structured
+evidence graph), not just a rendering.
+
+Persistence models (Prisma) are **not** the domain model: repositories map
+between the two, and the domain layer never imports Prisma. The §4 sketch is
+superseded by `prisma/schema.prisma` from Phase 5 onward.
+
+### 14.3 AI bounded context
+
+A separate bounded context (`src/core/ai/` ports; `src/server/ai/` adapters —
+implemented post-Phase 9) for forecasting, narrative explanations,
+recommendations, and natural-language payroll queries. Boundary rules, which are
+the whole point:
+
+- **AI reads projections; it never writes ledger state.** Inputs are the same
+  read models humans see (explanation trees, shift history, period results);
+  outputs are suggestions, narratives, and _proposed_ actions that go through the
+  same server actions as a human would.
+- **Deterministic engines remain the source of numeric truth.** The AI layer may
+  rephrase or explore (“what if I drop Saturday?” compiles to a what-if engine
+  run — Phase 3 §9); it never computes pay itself.
+- **Provider-agnostic**: `LanguageModelPort` with an Anthropic adapter first;
+  degradable to zero-cost heuristics (the statistical forecaster) so the free
+  tier keeps working with AI features off.
+- Ports defined in Phase 5 as code (`ForecastModel`, `ExplanationNarrator`,
+  `RecommendationEngine`, `PayrollQueryAgent`); implementations are explicitly
+  out of v1 scope.
+
+### 14.4 Offline-first PWA
+
+The app ships as a **Progressive Web App** (Serwist service worker + manifest,
+added with the app shell in Phase 6):
+
+- **Reads work offline.** The app shell is precached; dashboard read models
+  (current period, shifts, payslips, discrepancies) are cached in IndexedDB with
+  a stale-while-revalidate policy and an explicit “as of &lt;time&gt;” staleness
+  indicator — honesty over illusion.
+- **v1 offline writes: none.** Mutations queue is deferred; offline users can
+  view everything and see clearly that actions need connectivity. Rationale: the
+  write paths that matter (ingestion) are server-side anyway; client mutation
+  queues + conflict resolution are complexity with almost no v1 payoff. Later,
+  low-risk mutations (acknowledge discrepancy, mark notification read) adopt
+  Background Sync first.
+- **Sync is automatic** on reconnect/focus via revalidation + the Realtime
+  channel; the cache is always a projection of server truth (server wins — no
+  merge semantics needed while writes are online-only).
+- Cached payroll data on-device is within the user’s own device trust boundary;
+  the cache is scoped per signed-in user and purged on sign-out.
+
+### 14.5 ADR additions
+
+| #   | Decision                                                                                   | Alternatives rejected                       | Why                                                                   |
+| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------- |
+| 11  | `EmailIngestionProvider` port with push/pull provider shapes                               | Apps-Script-shaped pipeline                 | Outlook/IMAP/Gmail-API arrive as adapters, domain untouched           |
+| 12  | Rich domain entities incl. `Contract`, `Role`; Prisma models mapped at repository boundary | anemic models = Prisma types everywhere     | behaviour lives with data; persistence swappable; invariants testable |
+| 13  | AI as bounded context over read models, never in the calculation loop                      | AI-computed payroll; AI omitted from design | trustworthy numbers + useful language layer; degradable to £0         |
+| 14  | PWA offline = cached reads + online-only writes (v1)                                       | full offline CRDT/queue sync                | 90% of value, 10% of complexity; ingestion is server-side regardless  |
 
 ---
 
-**Next:** on your approval, Phase 5 — implement schema, migrations, seeds, and the
+**Next:** Phase 5 — schema, migrations, statutory seeds, domain core, and the
 repository layer with tenant-isolation tests. Sample rota emails + one payslip
 (Phase 1 §9) unblock Phase 7’s parser work and can be gathered in parallel.

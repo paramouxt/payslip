@@ -1,0 +1,635 @@
+// Persistence model. NOT the domain model — src/core/domain owns behaviour and
+// invariants; repositories (src/server/repositories) map between the two.
+//
+// Conventions:
+//   * cuid string PKs
+//   * every domain table carries the tenant key `userId` (indexed)
+//   * money is integer minor units (pence) — never floats
+//   * instants are `DateTime` (UTC); calendar dates are `@db.Date`; wall-clock
+//     context is an IANA timezone string alongside
+//   * Json columns are documents validated by zod schemas in src/core; the
+//     schema version travels inside the document
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Identity & tenancy
+// ────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  taxProfiles         TaxProfile[]
+  employers           Employer[]
+  contracts           Contract[]
+  mailboxConnections  MailboxConnection[]
+  emailMessages       EmailMessage[]
+  ingestionRuns       IngestionRun[]
+  shifts              Shift[]
+  shiftEvents         ShiftEvent[]
+  payrollPeriods      PayrollPeriod[]
+  expectedPays        ExpectedPay[]
+  payslips            Payslip[]
+  discrepancies       Discrepancy[]
+  evidencePacks       EvidencePack[]
+  notifications       Notification[]
+  pushSubscriptions   PushSubscription[]
+}
+
+// Auth.js (next-auth) adapter tables — kept apart from domain tables.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// Statutory inputs that belong to the person, per jurisdiction & tax year
+/// (tax code, NI category, pension scheme, student loan plan).
+model TaxProfile {
+  id           String   @id @default(cuid())
+  userId       String
+  jurisdiction String // ISO 3166-1 alpha-2, e.g. "GB"
+  taxYear      String // e.g. "2026-27"
+  taxCode      String // e.g. "1257L"
+  taxBasis     TaxBasis @default(CUMULATIVE)
+  niCategory   String // e.g. "A"
+  pension      Json? // scheme kind, employee %, qualifying-earnings vs full
+  studentLoan  String? // PLAN_1 | PLAN_2 | PLAN_4 | PLAN_5 | POSTGRAD
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jurisdiction, taxYear])
+}
+
+enum TaxBasis {
+  CUMULATIVE
+  WEEK1MONTH1
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Employer configuration (per-tenant; nothing here is hardcoded in engines)
+// ────────────────────────────────────────────────────────────────────────────
+
+model Employer {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String
+  slug            String
+  timezone        String // IANA, e.g. "Europe/London"
+  currency        String // ISO 4217, e.g. "GBP"
+  jurisdiction    String // ISO 3166-1 alpha-2, e.g. "GB"
+  payPeriodScheme Json // PayPeriodScheme document (core/domain/payroll-period)
+  roundingPolicy  Json // per-component rounding rules
+  senderPatterns  Json     @default("[]") // classifier hints: sender/subject patterns
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contracts      Contract[]
+  roles          Role[]
+  rateClasses    RateClass[]
+  ruleSets       RuleSet[]
+  shifts         Shift[]
+  payrollPeriods PayrollPeriod[]
+  payslips       Payslip[]
+
+  @@unique([userId, slug])
+}
+
+/// The employment relationship between a user and an employer. Shifts and
+/// payslips hang off the contract, which is what makes multiple employers —
+/// and re-negotiated terms at the same employer — first-class.
+model Contract {
+  id                      String    @id @default(cuid())
+  userId                  String
+  employerId              String
+  startDate               DateTime  @db.Date
+  endDate                 DateTime? @db.Date
+  employeeRefEncrypted    String? // AES-256-GCM, key in env — never plaintext
+  defaultRoleId           String?
+  payPeriodSchemeOverride Json? // rare: person-specific scheme
+  notes                   String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer    Employer  @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  defaultRole Role?     @relation(fields: [defaultRoleId], references: [id], onDelete: SetNull)
+  shifts      Shift[]
+  payslips    Payslip[]
+
+  @@index([userId, employerId])
+}
+
+/// Employer-scoped role (e.g. "Hands-Free", "Reserved Parking"). Carries the
+/// default rate class; rules and overrides can re-assign per shift.
+model Role {
+  id                 String   @id @default(cuid())
+  employerId         String
+  name               String
+  slug               String
+  defaultRateClassId String?
+  createdAt          DateTime @default(now())
+
+  employer         Employer   @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  defaultRateClass RateClass? @relation(fields: [defaultRateClassId], references: [id], onDelete: SetNull)
+  contracts        Contract[]
+  shifts           Shift[]
+
+  @@unique([employerId, slug])
+}
+
+model RateClass {
+  id         String   @id @default(cuid())
+  employerId String
+  name       String
+  slug       String
+  createdAt  DateTime @default(now())
+
+  employer       Employer      @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  rateVersions   RateVersion[]
+  defaultForRole Role[]
+  overriddenOn   Shift[]
+
+  @@unique([employerId, slug])
+}
+
+/// Rates change over time; historical recomputation uses the version in force
+/// on the shift date.
+model RateVersion {
+  id            String    @id @default(cuid())
+  rateClassId   String
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  components    Json // [{type:"BASE",pencePerHour:1388},{type:"HOLIDAY_ROLLED_UP",percentOfBase:12.07}]
+  createdAt     DateTime  @default(now())
+
+  rateClass RateClass @relation(fields: [rateClassId], references: [id], onDelete: Cascade)
+
+  @@index([rateClassId, effectiveFrom])
+}
+
+/// Ordered, versioned assignment rules (closed condition DSL — see
+/// core/domain/rules). Documents, not rows: read whole, never joined.
+model RuleSet {
+  id            String        @id @default(cuid())
+  employerId    String
+  version       Int
+  status        RuleSetStatus @default(DRAFT)
+  effectiveFrom DateTime      @db.Date
+  rules         Json
+  createdAt     DateTime      @default(now())
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@unique([employerId, version])
+}
+
+enum RuleSetStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Ingestion (append-only evidence ledger)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// A connected mailbox. Provider-agnostic: the kind selects the
+/// EmailIngestionProvider adapter; config is non-secret provider config.
+model MailboxConnection {
+  id           String              @id @default(cuid())
+  userId       String
+  provider     MailboxProviderKind
+  label        String
+  emailAddress String?
+  config       Json                @default("{}")
+  lastEventAt  DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secrets       IngestionSecret[]
+  emailMessages EmailMessage[]
+
+  @@index([userId])
+}
+
+enum MailboxProviderKind {
+  APPS_SCRIPT_PUSH
+  GENERIC_WEBHOOK
+  GMAIL_API
+  IMAP
+  MS_GRAPH
+}
+
+/// HMAC secrets for push providers — hashed at rest, rotatable, revocable.
+model IngestionSecret {
+  id                  String    @id @default(cuid())
+  mailboxConnectionId String
+  secretHash          String
+  label               String?
+  createdAt           DateTime  @default(now())
+  lastUsedAt          DateTime?
+  revokedAt           DateTime?
+
+  mailboxConnection MailboxConnection @relation(fields: [mailboxConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([mailboxConnectionId])
+}
+
+/// One row per received email. The raw MIME lives immutably in Storage;
+/// everything parsed from it is a rebuildable projection.
+model EmailMessage {
+  id                  String               @id @default(cuid())
+  userId              String
+  mailboxConnectionId String?
+  dedupeKey           String               @unique // hash(provider message id + mailbox)
+  providerMessageId   String?
+  receivedAt          DateTime
+  subject             String
+  fromAddress         String
+  rawStorageKey       String? // Supabase Storage object key (immutable)
+  sizeBytes           Int?
+  classification      EmailClassification?
+  parseStatus         ParseStatus          @default(PENDING)
+  parserId            String?
+  parserVersion       String?
+  parsedAt            DateTime?
+  parseError          String?
+  createdAt           DateTime             @default(now())
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mailboxConnection MailboxConnection? @relation(fields: [mailboxConnectionId], references: [id], onDelete: SetNull)
+  shiftEvents       ShiftEvent[]
+  payslips          Payslip[]
+
+  @@index([userId, receivedAt])
+  @@index([userId, parseStatus])
+}
+
+enum EmailClassification {
+  ROTA
+  ROTA_CHANGE
+  CANCELLATION
+  PAYSLIP
+  PAY_COMMS
+  OTHER
+}
+
+enum ParseStatus {
+  PENDING
+  PARSED
+  QUARANTINED
+  IGNORED
+}
+
+model IngestionRun {
+  id         String           @id @default(cuid())
+  userId     String
+  trigger    IngestionTrigger
+  startedAt  DateTime         @default(now())
+  finishedAt DateTime?
+  stats      Json             @default("{}")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+}
+
+enum IngestionTrigger {
+  PUSH
+  SWEEP
+  REPLAY
+  BACKFILL
+  MANUAL
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Shifts — append-only event log + current-state projection
+// ────────────────────────────────────────────────────────────────────────────
+
+model Shift {
+  id                  String      @id @default(cuid())
+  userId              String
+  employerId          String // denormalised from contract for query ergonomics
+  contractId          String
+  externalRef         String? // employer's shift id, when the rota carries one
+  date                DateTime    @db.Date // rota date (shift may cross midnight)
+  startAt             DateTime
+  endAt               DateTime
+  timezone            String
+  roleId              String?
+  venue               String?
+  notes               String?
+  status              ShiftStatus @default(SCHEDULED)
+  rateClassOverrideId String? // manual override — beats rules, recorded as event
+  version             Int         @default(1) // count of events applied
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer          Employer   @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  contract          Contract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  role              Role?      @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  rateClassOverride RateClass? @relation(fields: [rateClassOverrideId], references: [id], onDelete: SetNull)
+  events            ShiftEvent[]
+
+  @@index([userId, date])
+  @@index([employerId, date])
+  @@index([contractId, date])
+}
+
+enum ShiftStatus {
+  SCHEDULED
+  AMENDED
+  CANCELLED
+  COMPLETED
+}
+
+/// Append-only. Never updated, never deleted. Each event links to its evidence
+/// (source email) or records the human actor for manual changes.
+model ShiftEvent {
+  id            String         @id @default(cuid())
+  shiftId       String
+  userId        String
+  seq           Int
+  kind          ShiftEventKind
+  sourceEmailId String?
+  actor         String? // "user" | "system" — set when sourceEmailId is null
+  snapshot      Json // full shift state after this event
+  diff          Json? // what changed, human-renderable
+  occurredAt    DateTime // domain time (email received / user action)
+  recordedAt    DateTime       @default(now())
+
+  shift       Shift         @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceEmail EmailMessage? @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+
+  @@unique([shiftId, seq])
+  @@index([userId, recordedAt])
+}
+
+enum ShiftEventKind {
+  CREATED
+  AMENDED
+  CANCELLED
+  REINSTATED
+  MANUAL_EDIT
+  OVERRIDE_SET
+  OVERRIDE_CLEARED
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Payroll & reconciliation
+// ────────────────────────────────────────────────────────────────────────────
+
+model PayrollPeriod {
+  id              String   @id @default(cuid())
+  userId          String
+  employerId      String
+  sequence        Int
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  expectedPayDate DateTime @db.Date
+  createdAt       DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer      Employer      @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  expectedPays  ExpectedPay[]
+  payslips      Payslip[]
+  discrepancies Discrepancy[]
+  evidencePacks EvidencePack[]
+
+  @@unique([employerId, sequence])
+  @@index([userId, startDate])
+}
+
+/// Recomputable projection of what the period *should* pay. Superseded rows are
+/// kept (current=false) — history of what we believed, and when, is evidence.
+model ExpectedPay {
+  id                 String   @id @default(cuid())
+  userId             String
+  payrollPeriodId    String
+  computedAt         DateTime @default(now())
+  current            Boolean  @default(true)
+  engineVersion      String
+  ruleSetVersion     Int?
+  statutoryConfigId  String?
+  ytdAnchorPayslipId String?
+  grossPence         Int
+  taxPence           Int
+  niPence            Int
+  pensionPence       Int
+  netPence           Int
+  lines              Json // explanation tree: per shift, per component, per statutory line
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payrollPeriod   PayrollPeriod    @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  statutoryConfig StatutoryConfig? @relation(fields: [statutoryConfigId], references: [id], onDelete: SetNull)
+
+  @@index([payrollPeriodId, current])
+  @@index([userId, computedAt])
+}
+
+model Payslip {
+  id                 String   @id @default(cuid())
+  userId             String
+  employerId         String
+  contractId         String
+  payrollPeriodId    String?
+  sourceEmailId      String?
+  documentStorageKey String? // PDF in private Storage bucket
+  payDate            DateTime @db.Date
+  grossPence         Int
+  taxPence           Int
+  niPence            Int
+  pensionPence       Int
+  netPence           Int
+  ytd                Json? // YTD gross/tax/NI — the cumulative anchor
+  lines              Json // parsed line items: hours × rate per component
+  referenceEncrypted String? // payslip reference — AES-256-GCM
+  createdAt          DateTime @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer      Employer       @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  contract      Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  payrollPeriod PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id], onDelete: SetNull)
+  sourceEmail   EmailMessage?  @relation(fields: [sourceEmailId], references: [id], onDelete: SetNull)
+  discrepancies Discrepancy[]
+
+  @@index([userId, payDate])
+}
+
+model Discrepancy {
+  id              String              @id @default(cuid())
+  userId          String
+  payrollPeriodId String
+  payslipId       String?
+  kind            DiscrepancyKind
+  severity        DiscrepancySeverity
+  status          DiscrepancyStatus   @default(OPEN)
+  expectedPence   Int?
+  actualPence     Int?
+  deltaPence      Int
+  summary         String
+  evidence        Json // shift ids, event ids, email ids, rule refs
+  createdAt       DateTime            @default(now())
+  resolvedAt      DateTime?
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payrollPeriod PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  payslip       Payslip?      @relation(fields: [payslipId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+}
+
+enum DiscrepancyKind {
+  MISSING_SHIFT
+  UNEXPECTED_LINE
+  RATE_MISMATCH
+  HOURS_MISMATCH
+  HOLIDAY_PCT_MISMATCH
+  DEDUCTION_MISMATCH
+  ROUNDING
+  NET_MISMATCH
+  OTHER
+}
+
+enum DiscrepancySeverity {
+  INFO
+  MINOR
+  MAJOR
+}
+
+enum DiscrepancyStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  EXPECTED_WRONG
+}
+
+/// Exportable case file for a disputed period: structured evidence graph plus
+/// (optionally) a rendered document in Storage.
+model EvidencePack {
+  id              String   @id @default(cuid())
+  userId          String
+  payrollPeriodId String
+  discrepancyIds  String[]
+  contents        Json
+  storageKey      String?
+  generatedAt     DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payrollPeriod PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+
+  @@index([userId, generatedAt])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Statutory configuration — data, not code (global, not tenant-scoped)
+// ────────────────────────────────────────────────────────────────────────────
+
+model StatutoryConfig {
+  id            String   @id @default(cuid())
+  jurisdiction  String // "GB"
+  taxYear       String // "2026-27"
+  effectiveFrom DateTime @db.Date
+  config        Json // bands, thresholds, NI category tables, loan plans…
+  source        String // provenance: gov.uk URL + date checked
+  createdAt     DateTime @default(now())
+
+  expectedPays ExpectedPay[]
+
+  @@unique([jurisdiction, taxYear])
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Notifications & ops
+// ────────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  payload   Json
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
+  pushedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  ROTA_INGESTED
+  SHIFT_CHANGED
+  SHIFT_CANCELLED
+  PAYSLIP_RECEIVED
+  DISCREPANCY_FOUND
+  SYSTEM_HEALTH
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  keys      Json
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

@@ -33,7 +33,7 @@ walking the same tree).
 (From Phase 2 §3, promoted to a feature.) Parsed payslips re-anchor cumulative
 tax/NI/pension state each period, so annual forecasts are `actuals + scheduled +
 projection` rather than compounding estimates. The dashboard shows forecast
-*confidence* honestly: which part of the year is payslip-backed, which is
+_confidence_ honestly: which part of the year is payslip-backed, which is
 scheduled, which is projected assumption.
 
 ## 4. Quarantine-to-fixture flywheel
@@ -70,7 +70,7 @@ employer’s timezone.
 Not “you received an email” but “**Sat 14 Jun, Bicester Village: 08:00–18:00 →
 CANCELLED** (rota email of 12 Jun)” with expected-pay impact (“this period −£155.60”).
 The event-sourced shift stream makes the diff available; the improvement is
-insisting notifications carry the *payroll consequence*, which is what a shift
+insisting notifications carry the _payroll consequence_, which is what a shift
 worker actually cares about.
 
 ## 8. Mailbox setup as a first-class onboarding flow
@@ -81,13 +81,13 @@ the per-user script (endpoint URL + HMAC secret pre-filled), step-by-step
 instructions, a “send test email” verifier, and a health indicator (last push
 seen, label backlog). A second signal — the daily reconciliation sweep — alerts if
 the forwarder goes quiet while mail is arriving. Observed during requirements: the
-rota mailbox is a *different* Google account than the one first connected —
+rota mailbox is a _different_ Google account than the one first connected —
 the flow must make “which account did you install this in?” explicit.
 
 ## 9. Simulation / what-if as an engine capability (pre-AI)
 
 The future AI questions (“what if I accept every shift?”, “what if I drop
-Saturday?”) are, mechanically, *engine runs over hypothetical shift sets*. Design
+Saturday?”) are, mechanically, _engine runs over hypothetical shift sets_. Design
 the engine API to accept arbitrary shift collections (real or hypothetical) from
 day one, and ship a simple non-AI what-if UI (toggle shifts on/off, see period/net
 impact) in the dashboard phase. The later AI layer becomes a language interface
@@ -99,7 +99,7 @@ Free-tier systems fail quietly (Phase 2 §6). The app watches itself: ingestion
 heartbeats, quarantine depth, keep-alive execution, forwarder silence detection —
 surfaced on a small “system health” card in settings, with Web Push on failures.
 Sentry (free tier) for exceptions with PII scrubbed. The £0 constraint makes this
-*more* necessary than in a paid stack, not less.
+_more_ necessary than in a paid stack, not less.
 
 ## Deliberately rejected
 
@@ -111,5 +111,5 @@ Sentry (free tier) for exceptions with PII scrubbed. The £0 constraint makes th
   captures the value; replay-only state is complexity without a customer.
 - **tRPC / GraphQL:** Next.js server components + server actions + a handful of
   route handlers cover a single-app product with far less machinery.
-- **Kafka-style queues:** the mailbox *is* the durable queue (Phase 1 NFR-7);
+- **Kafka-style queues:** the mailbox _is_ the durable queue (Phase 1 NFR-7);
   Postgres rows model pipeline state fine at this scale.

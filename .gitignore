@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# environment — secrets never enter the repo
+.env
+.env.*
+!.env.example
+
+# builds & caches
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# generated prisma client
+src/generated/
+
+# OS/editor noise
+.DS_Store

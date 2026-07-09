@@ -6,8 +6,19 @@ trail, computes expected pay through a configurable rules engine, estimates UK t
 National Insurance / pension, reconciles expectations against real payslips, and
 flags payroll mistakes — live, with £0/month running costs for a single user.
 
-> **Status:** Phase 4 (Architecture) delivered — awaiting approval before Phase 5
-> (Database implementation). See `docs/` for the full design record.
+> **Status:** Phase 5 delivered — schema + migration, statutory seeds, pure
+> domain core (Money, periods, Shift aggregate, rule DSL/engine, ingestion & AI
+> ports), tenant-scoped repositories, 57 tests incl. Postgres integration.
+> Next: Phase 6 (authentication + app shell). See `docs/` for the design record.
+
+## Getting started
+
+```bash
+pnpm install
+cp .env.example .env           # fill in DATABASE_URL / DIRECT_URL
+pnpm db:generate && pnpm db:migrate && pnpm db:seed
+pnpm test                      # set TEST_DATABASE_URL to include integration tests
+```
 
 ## Why this exists
 
@@ -20,12 +31,12 @@ When a payslip is wrong, the app doesn't just say so — it can show the proof.
 
 ## Documentation map
 
-| Document | Phase | Contents |
-| --- | --- | --- |
-| [docs/phase-1-requirements.md](docs/phase-1-requirements.md) | 1 | Requirements analysis, confirmed domain facts, open questions |
-| [docs/phase-2-assumptions-challenged.md](docs/phase-2-assumptions-challenged.md) | 2 | Where the original brief is wrong or risky, and what we do instead |
-| [docs/phase-3-improvements.md](docs/phase-3-improvements.md) | 3 | Improvements beyond the brief |
-| [docs/phase-4-architecture.md](docs/phase-4-architecture.md) | 4 | System architecture, data model, API surface, security, testing, cost model |
+| Document                                                                         | Phase | Contents                                                                    |
+| -------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------- |
+| [docs/phase-1-requirements.md](docs/phase-1-requirements.md)                     | 1     | Requirements analysis, confirmed domain facts, open questions               |
+| [docs/phase-2-assumptions-challenged.md](docs/phase-2-assumptions-challenged.md) | 2     | Where the original brief is wrong or risky, and what we do instead          |
+| [docs/phase-3-improvements.md](docs/phase-3-improvements.md)                     | 3     | Improvements beyond the brief                                               |
+| [docs/phase-4-architecture.md](docs/phase-4-architecture.md)                     | 4     | System architecture, data model, API surface, security, testing, cost model |
 
 ## Principles (non-negotiable)
 

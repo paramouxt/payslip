@@ -21,18 +21,18 @@ continuously and automatically:
    against expectations, with discrepancies surfaced as first-class objects backed by
    evidence.
 
-The wedge is #3. Plenty of apps show your rota. Almost nothing *proves your payslip
-is wrong* with an evidence chain (this email, on this date, said this shift, at this
+The wedge is #3. Plenty of apps show your rota. Almost nothing _proves your payslip
+is wrong_ with an evidence chain (this email, on this date, said this shift, at this
 rate, under this rule). That is the feature worth building a company on.
 
 ## 2. Actors
 
-| Actor | v1 | Later |
-| --- | --- | --- |
-| Shift worker (product owner) | ✅ sole user | primary persona |
-| Additional shift workers | ❌ (schema-ready) | self-serve sign-up |
-| Teams/agencies (managers viewing staff payroll health) | ❌ | organisation layer |
-| Automated ingestion (mailbox forwarder) | ✅ machine actor | per-user |
+| Actor                                                  | v1                | Later              |
+| ------------------------------------------------------ | ----------------- | ------------------ |
+| Shift worker (product owner)                           | ✅ sole user      | primary persona    |
+| Additional shift workers                               | ❌ (schema-ready) | self-serve sign-up |
+| Teams/agencies (managers viewing staff payroll health) | ❌                | organisation layer |
+| Automated ingestion (mailbox forwarder)                | ✅ machine actor  | per-user           |
 
 v1 is single-user in operation but multi-tenant in schema: every domain row carries a
 `userId`; nothing assumes “the” user. See Phase 2 §10 for why we stop there.
@@ -62,18 +62,18 @@ formula for irregular-hours workers.)
 The brief’s “Holiday Pay £1.68 / £1.82” figures are not independent rates — they are
 **derived**: £13.88 × 12.07% = £1.6753 → £1.68; £15.06 × 12.07% = £1.8177 → £1.82.
 
-**Design consequence:** the rules engine models holiday pay as a *percentage
-component* of base, with an explicit per-component rounding policy — not as a second
+**Design consequence:** the rules engine models holiday pay as a _percentage
+component_ of base, with an explicit per-component rounding policy — not as a second
 hardcoded hourly rate. When the base rate changes, holiday pay follows automatically;
 and if a payslip shows holiday pay that isn’t 12.07% of base hours, that is itself a
 detectable discrepancy.
 
 ### 3.3 Rate classes and assignment rules **[STATED]**
 
-| Rate class | Base | Rolled-up holiday (12.07%) | Effective total |
-| --- | --- | --- | --- |
-| Hands-Free | £13.88/h | £1.68/h | £15.56/h |
-| Reserved Parking | £15.06/h | £1.82/h | £16.88/h |
+| Rate class       | Base     | Rolled-up holiday (12.07%) | Effective total |
+| ---------------- | -------- | -------------------------- | --------------- |
+| Hands-Free       | £13.88/h | £1.68/h                    | £15.56/h        |
+| Reserved Parking | £15.06/h | £1.82/h                    | £16.88/h        |
 
 Assignment rules (Tracsis-specific, expressed as data in the rules engine):
 
@@ -90,7 +90,7 @@ hours after unpaid breaks — and whether breaks are unpaid at all (§9, Q3–Q4
 
 - Rota emails: new rotas, amendments, cancellations arrive by email.
 - Payslips: format and delivery channel not yet confirmed (§9, Q1–Q2).
-- **Observed:** the rota emails do *not* arrive in the mailbox connected during
+- **Observed:** the rota emails do _not_ arrive in the mailbox connected during
   requirements gathering; they arrive in a second Gmail account. v1 must support
   designating which mailbox is the ingestion source, and the parser cannot be
   designed until sample emails are provided (a Phase 7 input, not a blocker before
@@ -102,6 +102,7 @@ Grouped by capability. “Must” = v1; “Should” = v1 if cheap, else v1.x; �
 post-SaaS-decision.
 
 ### FR-1 Email ingestion
+
 - **Must** ingest new emails from the designated Gmail mailbox with ≤ ~1 minute
   latency, without manual action.
 - **Must** archive the complete raw email (RFC 822/MIME, attachments included)
@@ -115,6 +116,7 @@ post-SaaS-decision.
   emails) to seed history.
 
 ### FR-2 Shift management
+
 - **Must** materialise parsed rotas into shifts: date, start/end, venue, role,
   employer, status (`SCHEDULED`, `AMENDED`, `CANCELLED`, `COMPLETED`).
 - **Must** detect changes: a re-issued rota updates matching shifts and records a
@@ -126,6 +128,7 @@ post-SaaS-decision.
 - **Must** support per-shift manual rate-class override (Tracsis rule 4).
 
 ### FR-3 Payroll computation (rules engine)
+
 - **Must** compute expected pay per shift and per pay period from **declarative,
   per-employer configuration**: rate classes, pay components (base, rolled-up holiday
   %, future: multipliers/allowances), assignment rules (ordered condition→effect),
@@ -139,6 +142,7 @@ post-SaaS-decision.
   employer config.
 
 ### FR-4 Statutory estimation (UK first)
+
 - **Must** estimate PAYE income tax, employee National Insurance, and pension
   contributions per pay period, given a user tax profile (tax code, NI category,
   pension scheme, student loan plan).
@@ -151,6 +155,7 @@ post-SaaS-decision.
 - **Later:** other jurisdictions behind the same `StatutoryCalculator` interface.
 
 ### FR-5 Payslip reconciliation
+
 - **Must** parse payslips (format TBC — §9 Q1) into structured line items: hours ×
   rate per component, gross, PAYE, NI, pension, net, YTD figures.
 - **Must** match each payslip to its pay period and reconcile line-by-line against
@@ -161,14 +166,16 @@ post-SaaS-decision.
 - **Should** export an “evidence pack” for a disputed period (see Phase 3 §1).
 
 ### FR-6 Forecasting & reporting
+
 - **Must** forecast earnings for current/future periods from scheduled shifts.
 - **Must** forecast tax-year totals (gross, tax, NI, net) combining actuals (payslips)
-  + expected (scheduled shifts) + projection (user-tunable assumption based on
-  historical average hours).
+  - expected (scheduled shifts) + projection (user-tunable assumption based on
+    historical average hours).
 - **Must** report: hours and earnings by fortnight/month/tax-year, employer
   comparison, premium-rate shift analysis.
 
 ### FR-7 Dashboard & UX
+
 - **Must:** upcoming shifts, calendar and timeline views, hours this fortnight/month,
   gross/net/holiday/PAYE/NI/pension for current period, income & tax forecast, recent
   ingestion activity, recent rota changes, payslip verification status, notifications,
@@ -179,32 +186,35 @@ post-SaaS-decision.
 - **Must:** accessibility — semantic HTML, keyboard navigable, WCAG AA contrast.
 
 ### FR-8 Notifications
+
 - **Must** notify on: new rota ingested, shift changed/cancelled, payslip received,
   discrepancy found. Channels v1: in-app + Web Push. **Should:** email digest.
 
 ### FR-9 Multi-employer & extensibility
+
 - **Must** support multiple employers per user, each with independent rules, periods,
   currency (display-level; no FX in v1), and parsers.
 - **Must** keep jurisdiction, currency, and locale per employer/user so future
   countries don’t require schema surgery.
 
 ### FR-10 Administration
+
 - **Must** provide settings UIs: employer & rules configuration (with rule testing
   against sample shifts), tax profile, mailbox connection status, notification prefs.
 
 ## 5. Non-functional requirements
 
-| # | Requirement | Target |
-| --- | --- | --- |
-| NFR-1 | Running cost, single user | **£0/month**, documented per service (Phase 4 §11) |
-| NFR-2 | Ingestion latency (email received → dashboard updated) | ≤ 90 s typical |
-| NFR-3 | Dashboard interaction | < 200 ms perceived; initial load < 2.5 s on 4G |
-| NFR-4 | Payroll correctness | Expected-vs-payslip agreement to the penny when inputs are correct; every mismatch explainable |
-| NFR-5 | Auditability | Every derived figure traceable to raw evidence + rule/engine versions |
-| NFR-6 | Security | OWASP Top 10; no PII in logs; sensitive data encrypted at rest; least-privilege mailbox access (Phase 4 §9) |
-| NFR-7 | Availability | Best-effort on free tiers; ingestion must tolerate downtime via replay (no data loss if the app is down — mail stays queued at source) |
-| NFR-8 | Portability | No service used in a way that prevents migration (plain Postgres, standard S3-style storage, standard OAuth) |
-| NFR-9 | Testability | Domain core 100% framework-free; parser + payroll golden-fixture suites |
+| #     | Requirement                                            | Target                                                                                                                                 |
+| ----- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| NFR-1 | Running cost, single user                              | **£0/month**, documented per service (Phase 4 §11)                                                                                     |
+| NFR-2 | Ingestion latency (email received → dashboard updated) | ≤ 90 s typical                                                                                                                         |
+| NFR-3 | Dashboard interaction                                  | < 200 ms perceived; initial load < 2.5 s on 4G                                                                                         |
+| NFR-4 | Payroll correctness                                    | Expected-vs-payslip agreement to the penny when inputs are correct; every mismatch explainable                                         |
+| NFR-5 | Auditability                                           | Every derived figure traceable to raw evidence + rule/engine versions                                                                  |
+| NFR-6 | Security                                               | OWASP Top 10; no PII in logs; sensitive data encrypted at rest; least-privilege mailbox access (Phase 4 §9)                            |
+| NFR-7 | Availability                                           | Best-effort on free tiers; ingestion must tolerate downtime via replay (no data loss if the app is down — mail stays queued at source) |
+| NFR-8 | Portability                                            | No service used in a way that prevents migration (plain Postgres, standard S3-style storage, standard OAuth)                           |
+| NFR-9 | Testability                                            | Domain core 100% framework-free; parser + payroll golden-fixture suites                                                                |
 
 NFR-7 is the quiet star: because Gmail retains the mail and ingestion is
 replay-based and idempotent, the system can be down for a day and lose nothing.
@@ -223,13 +233,13 @@ Durability lives at the source, not in our uptime.
 
 ## 7. Key risks (requirements-level)
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Rota email format unknown/changes without notice | Parser breaks silently | Immutable raw archive + quarantine + fixtures; parsing failures are loud, data is never lost (Phase 2 §2) |
-| Google OAuth restricted-scope verification wall | Breaks “live + free” if we use Gmail API naively | Push-based ingestion from the user’s own account; no restricted scopes in v1 (Phase 2 §1) |
-| Cumulative PAYE needs YTD state | Tax estimates drift | Anchor YTD from each parsed payslip (Phase 3 §3) |
-| Free-tier behaviours (DB pausing, cron limits) | Silent outages | Keep-alive + reconciliation jobs; documented in cost model (Phase 4 §11) |
-| Payslip channel/format unknown | Reconciliation blocked | §9 Q1; reconciliation ships behind ingestion once samples exist |
+| Risk                                             | Impact                                           | Mitigation                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Rota email format unknown/changes without notice | Parser breaks silently                           | Immutable raw archive + quarantine + fixtures; parsing failures are loud, data is never lost (Phase 2 §2) |
+| Google OAuth restricted-scope verification wall  | Breaks “live + free” if we use Gmail API naively | Push-based ingestion from the user’s own account; no restricted scopes in v1 (Phase 2 §1)                 |
+| Cumulative PAYE needs YTD state                  | Tax estimates drift                              | Anchor YTD from each parsed payslip (Phase 3 §3)                                                          |
+| Free-tier behaviours (DB pausing, cron limits)   | Silent outages                                   | Keep-alive + reconciliation jobs; documented in cost model (Phase 4 §11)                                  |
+| Payslip channel/format unknown                   | Reconciliation blocked                           | §9 Q1; reconciliation ships behind ingestion once samples exist                                           |
 
 ## 8. Success criteria for v1
 
