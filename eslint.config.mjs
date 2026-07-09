@@ -3,7 +3,16 @@ import tseslint from 'typescript-eslint';
 import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
-  { ignores: ['node_modules/**', '.next/**', 'coverage/**', 'src/generated/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      '.next/**',
+      'coverage/**',
+      'src/generated/**',
+      'public/**',
+      'next-env.d.ts',
+    ],
+  },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,
@@ -11,7 +20,7 @@ export default defineConfig(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.mjs'],
+          allowDefaultProject: ['eslint.config.mjs', 'postcss.config.mjs'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -56,7 +65,7 @@ export default defineConfig(
     },
   },
   {
-    // ── src/server may not reach into UI. ────────────────────────────────
+    // ── src/server may not reach into UI (Next *server* runtime is fine). ─
     files: ['src/server/**/*.ts'],
     rules: {
       'no-restricted-imports': [
@@ -64,19 +73,21 @@ export default defineConfig(
         {
           patterns: [
             {
-              group: [
-                '@/app/*',
-                '@/features/*',
-                '@/components/*',
-                'react',
-                'react-*',
-                'next',
-                'next/*',
-              ],
+              group: ['@/app/*', '@/features/*', '@/components/*', 'react', 'react-dom'],
               message: 'server layer must not import UI',
             },
           ],
         },
+      ],
+    },
+  },
+  {
+    // Server actions passed to form `action` are async by design.
+    files: ['**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-misused-promises': [
+        'error',
+        { checksVoidReturn: { attributes: false } },
       ],
     },
   },

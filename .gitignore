@@ -11,6 +11,12 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+next-env.d.ts
+public/sw.js
+public/swe-worker*.js
+
+# local object storage (dev fallback)
+.data/
 
 # generated prisma client
 src/generated/
