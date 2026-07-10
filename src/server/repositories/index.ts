@@ -4,6 +4,8 @@ import type {
   ContractRepository,
   EmailMessageRepository,
   EmployerRepository,
+  IngestConnectionLookup,
+  MailboxConnectionRepository,
   NotificationRepository,
   PayrollPeriodRepository,
   ShiftRepository,
@@ -12,6 +14,10 @@ import type {
 import { createPrismaContractRepository } from './prisma/contract-repository';
 import { createPrismaEmailMessageRepository } from './prisma/email-message-repository';
 import { createPrismaEmployerRepository } from './prisma/employer-repository';
+import {
+  createPrismaIngestConnectionLookup,
+  createPrismaMailboxConnectionRepository,
+} from './prisma/mailbox-connection-repository';
 import { createPrismaNotificationRepository } from './prisma/notification-repository';
 import { createPrismaPayrollPeriodRepository } from './prisma/payroll-period-repository';
 import { createPrismaShiftRepository } from './prisma/shift-repository';
@@ -22,6 +28,7 @@ export interface TenantRepositories {
   contracts: ContractRepository;
   shifts: ShiftRepository;
   emailMessages: EmailMessageRepository;
+  mailboxConnections: MailboxConnectionRepository;
   payrollPeriods: PayrollPeriodRepository;
   notifications: NotificationRepository;
 }
@@ -36,6 +43,7 @@ export function createTenantRepositories(
     contracts: createPrismaContractRepository(db, tenant),
     shifts: createPrismaShiftRepository(db, tenant),
     emailMessages: createPrismaEmailMessageRepository(db, tenant),
+    mailboxConnections: createPrismaMailboxConnectionRepository(db, tenant),
     payrollPeriods: createPrismaPayrollPeriodRepository(db, tenant),
     notifications: createPrismaNotificationRepository(db, tenant),
   };
@@ -43,8 +51,12 @@ export function createTenantRepositories(
 
 export interface GlobalRepositories {
   statutoryConfigs: StatutoryConfigRepository;
+  ingestConnections: IngestConnectionLookup;
 }
 
 export function createGlobalRepositories(db: PrismaClient): GlobalRepositories {
-  return { statutoryConfigs: createPrismaStatutoryConfigRepository(db) };
+  return {
+    statutoryConfigs: createPrismaStatutoryConfigRepository(db),
+    ingestConnections: createPrismaIngestConnectionLookup(db),
+  };
 }

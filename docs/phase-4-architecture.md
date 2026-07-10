@@ -557,12 +557,13 @@ added with the app shell in Phase 6):
 
 ### 14.5 ADR additions
 
-| #   | Decision                                                                                   | Alternatives rejected                       | Why                                                                   |
-| --- | ------------------------------------------------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------- |
-| 11  | `EmailIngestionProvider` port with push/pull provider shapes                               | Apps-Script-shaped pipeline                 | Outlook/IMAP/Gmail-API arrive as adapters, domain untouched           |
-| 12  | Rich domain entities incl. `Contract`, `Role`; Prisma models mapped at repository boundary | anemic models = Prisma types everywhere     | behaviour lives with data; persistence swappable; invariants testable |
-| 13  | AI as bounded context over read models, never in the calculation loop                      | AI-computed payroll; AI omitted from design | trustworthy numbers + useful language layer; degradable to £0         |
-| 14  | PWA offline = cached reads + online-only writes (v1)                                       | full offline CRDT/queue sync                | 90% of value, 10% of complexity; ingestion is server-side regardless  |
+| #   | Decision                                                                                     | Alternatives rejected                                                   | Why                                                                   |
+| --- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 11  | `EmailIngestionProvider` port with push/pull provider shapes                                 | Apps-Script-shaped pipeline                                             | Outlook/IMAP/Gmail-API arrive as adapters, domain untouched           |
+| 12  | Rich domain entities incl. `Contract`, `Role`; Prisma models mapped at repository boundary   | anemic models = Prisma types everywhere                                 | behaviour lives with data; persistence swappable; invariants testable |
+| 13  | AI as bounded context over read models, never in the calculation loop                        | AI-computed payroll; AI omitted from design                             | trustworthy numbers + useful language layer; degradable to £0         |
+| 14  | PWA offline = cached reads + online-only writes (v1)                                         | full offline CRDT/queue sync                                            | 90% of value, 10% of complexity; ingestion is server-side regardless  |
+| 15  | Ingestion HMAC keys HKDF-derived per (connection, version); only a verification hash at rest | storing secrets hashed (impossible for HMAC); storing encrypted secrets | DB breach alone yields nothing; rotation is a version bump            |
 
 ---
 

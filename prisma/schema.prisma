@@ -274,10 +274,13 @@ enum MailboxProviderKind {
   MS_GRAPH
 }
 
-/// HMAC secrets for push providers — hashed at rest, rotatable, revocable.
+/// Push-provider HMAC keys are HKDF-derived from the master key per
+/// (connection, keyVersion) — never stored. This row records the active
+/// version and a verification hash, and makes rotation/revocation explicit.
 model IngestionSecret {
   id                  String    @id @default(cuid())
   mailboxConnectionId String
+  keyVersion          Int       @default(1)
   secretHash          String
   label               String?
   createdAt           DateTime  @default(now())

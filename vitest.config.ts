@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
+    setupFiles: ['tests/setup.ts'],
     // Integration tests require TEST_DATABASE_URL; they self-skip when absent.
     passWithNoTests: false,
   },

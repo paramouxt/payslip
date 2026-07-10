@@ -92,7 +92,59 @@ export interface EmailMessageRepository {
     rawStorageKey?: string | null;
     sizeBytes?: number | null;
   }): Promise<{ created: boolean; id: string }>;
+  getById(id: string): Promise<(EmailMessageRecord & { classification: string | null }) | null>;
+  setArchive(id: string, rawStorageKey: string, sizeBytes: number): Promise<void>;
+  setClassification(id: string, classification: string): Promise<void>;
+  setParseOutcome(
+    id: string,
+    outcome: {
+      status: EmailMessageRecord['parseStatus'];
+      parserId?: string | null;
+      parserVersion?: string | null;
+      parseError?: string | null;
+    }
+  ): Promise<void>;
   listByStatus(status: EmailMessageRecord['parseStatus']): Promise<EmailMessageRecord[]>;
+  countByStatus(status: EmailMessageRecord['parseStatus']): Promise<number>;
+}
+
+export interface MailboxConnectionRecord {
+  id: string;
+  provider: string;
+  label: string;
+  emailAddress: string | null;
+  lastEventAt: Date | null;
+  activeKeyVersion: number;
+  createdAt: Date;
+}
+
+export interface MailboxConnectionRepository {
+  create(input: {
+    provider: 'APPS_SCRIPT_PUSH' | 'GENERIC_WEBHOOK';
+    label: string;
+    emailAddress?: string | null;
+    keyVersion: number;
+    verificationHash: string;
+  }): Promise<MailboxConnectionRecord>;
+  list(): Promise<MailboxConnectionRecord[]>;
+  getById(id: string): Promise<MailboxConnectionRecord | null>;
+  /** Adds a new key version and revokes prior ones. */
+  rotateKey(connectionId: string, keyVersion: number, verificationHash: string): Promise<void>;
+  touchLastEvent(connectionId: string, at: Date): Promise<void>;
+}
+
+/**
+ * Machine-path lookup for the ingestion endpoint: there is no session, so the
+ * tenant is derived FROM the connection row. Global by necessity, documented
+ * as the exception it is (§4.3 allows only statutory config + this).
+ */
+export interface IngestConnectionLookup {
+  findForIngest(connectionId: string): Promise<{
+    id: string;
+    userId: string;
+    activeKeyVersion: number;
+    verificationHash: string;
+  } | null>;
 }
 
 export interface PayrollPeriodRecord {

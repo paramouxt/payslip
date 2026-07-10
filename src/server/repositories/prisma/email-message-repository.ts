@@ -37,6 +37,49 @@ export function createPrismaEmailMessageRepository(
       }
     },
 
+    async getById(id) {
+      const row = await db.emailMessage.findFirst({
+        where: { id, userId },
+        select: {
+          id: true,
+          dedupeKey: true,
+          receivedAt: true,
+          subject: true,
+          fromAddress: true,
+          parseStatus: true,
+          classification: true,
+        },
+      });
+      return row;
+    },
+
+    async setArchive(id, rawStorageKey, sizeBytes) {
+      await db.emailMessage.updateMany({
+        where: { id, userId },
+        data: { rawStorageKey, sizeBytes },
+      });
+    },
+
+    async setClassification(id, classification) {
+      await db.emailMessage.updateMany({
+        where: { id, userId },
+        data: { classification: classification as never },
+      });
+    },
+
+    async setParseOutcome(id, outcome) {
+      await db.emailMessage.updateMany({
+        where: { id, userId },
+        data: {
+          parseStatus: outcome.status,
+          parserId: outcome.parserId ?? null,
+          parserVersion: outcome.parserVersion ?? null,
+          parseError: outcome.parseError ?? null,
+          parsedAt: new Date(),
+        },
+      });
+    },
+
     async listByStatus(status) {
       const rows = await db.emailMessage.findMany({
         where: { userId, parseStatus: status },
@@ -51,6 +94,10 @@ export function createPrismaEmailMessageRepository(
         },
       });
       return rows;
+    },
+
+    async countByStatus(status) {
+      return db.emailMessage.count({ where: { userId, parseStatus: status } });
     },
   };
 }

@@ -461,11 +461,17 @@ must be a deliberate, documented trade-off.
 
 ### Ingestion endpoint
 
-HMAC-SHA256 with per-connection secrets (hashed at rest, rotatable,
-revocable), timestamp window against replay, body size caps, attachment
-content-type allowlist. Emails are **hostile input**: zod-parse everything,
-archive before parsing, and let parsers fail into quarantine — never into
-partial writes.
+HMAC-SHA256 over `timestamp.body` with **HKDF-derived per-connection keys**
+(ADR 15): keys are derived from `APP_ENCRYPTION_KEY` + connection id + key
+version and are never stored — the database holds only the active key version
+and a verification hash, so a database breach alone yields nothing. Rotation
+= bump the version (old signatures die instantly); revocation = revoke the
+secret row. Plus: timestamp window against replay, body size caps, zod-parsed
+payloads. Emails are **hostile input**: archive before parsing, and let
+parsers fail into quarantine — never into partial writes.
+_Amended 2026-07-09 (Phase 7): the original "secrets hashed at rest" wording
+was unimplementable — HMAC verification requires the key. Derivation is
+strictly stronger than storing encrypted secrets._
 
 ### Data protection
 
