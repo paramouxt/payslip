@@ -52,8 +52,11 @@ branch the session was assigned (currently
 `claude/workforce-payroll-platform-c2x0f9`). CI must be green before a phase
 is called done.
 
-**Current position on the roadmap (see §17): Phases 1–5 complete. Phase 6
-(authentication + app shell + PWA scaffold) is next.**
+**Current position on the roadmap (see §17): Phases 1–10 built and tested.
+Phase 7's Tracsis parser is v0 (quarantine-everything) pending sample emails;
+Phase 11 has property tests but E2E+axe outstanding; Phase 12 has config +
+runbook (`docs/deployment.md`) but Sentry wiring and the production deploy
+itself outstanding. Statutory seeds still carry "VERIFY against gov.uk".**
 
 ---
 
@@ -748,7 +751,7 @@ auth routes). Public API is `[FUTURE]`.
 The pyramid is deliberately bottom-heavy because the product's value is in
 pure engines, which are cheap to test exhaustively.
 
-- **Unit (core)** `[BUILT — 52 tests today]`: money rounding law, calendar
+- **Unit (core)** `[BUILT — 100+ tests]`: money rounding law, calendar
   math (incl. DST and leap years), pay-period schemes (incl. the April-2026
   transition and the override-collision guard), Shift aggregate invariants
   and replay, rule DSL closure and engine precedence. Every new domain
@@ -826,18 +829,18 @@ situation.
 
 The 12-phase plan (phase-4 §12) with live status:
 
-| Phase | Scope                                                                                                                                                              | Status                                              |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| 1–3   | Requirements, challenged assumptions, improvements                                                                                                                 | ✅ `docs/phase-1..3`                                |
-| 4     | Architecture (+v1.1 refinements: provider-agnostic ingestion, rich domain, AI context, PWA)                                                                        | ✅ `docs/phase-4`                                   |
-| 5     | Schema + migration, statutory seeds, domain core, tenant-scoped repositories, CI — 57 tests                                                                        | ✅ commit `5efe6f6`                                 |
-| **6** | **Auth.js Google sign-in, app shell (sidebar/palette/theming), protected routes, PWA scaffold (Serwist), composition root**                                        | **next**                                            |
-| 7     | Ingestion: endpoint + HMAC, Apps Script generator + onboarding UI, archive/classify/parse (needs sample emails — Phase 1 §9), quarantine UI, backfill, daily sweep | blocked only on sample emails for the parser itself |
-| 8     | Payroll engine, statutory UK (verify seeds vs gov.uk), ExpectedPay projections, reconciliation, discrepancies, evidence packs                                      | —                                                   |
-| 9     | Dashboard (all FR-7 views), explanation trees UI, what-if panel, Realtime, offline read cache                                                                      | —                                                   |
-| 10    | Notifications (in-app + Web Push), system health card                                                                                                              | —                                                   |
-| 11    | Test hardening: property tests, E2E + axe, coverage targets                                                                                                        | —                                                   |
-| 12    | Production deployment, Sentry, runbook, cost-audit verification                                                                                                    | —                                                   |
+| Phase | Scope                                                                                                                           | Status                                                                     |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1–3   | Requirements, challenged assumptions, improvements                                                                              | ✅ `docs/phase-1..3`                                                       |
+| 4     | Architecture (+v1.1 refinements: provider-agnostic ingestion, rich domain, AI context, PWA)                                     | ✅ `docs/phase-4`                                                          |
+| 5     | Schema + migration, statutory seeds, domain core, tenant-scoped repositories, CI                                                | ✅ `5efe6f6`                                                               |
+| 6     | Auth.js Google sign-in, app shell, protected routes, PWA scaffold, composition root                                             | ✅ `1e2a9ba`                                                               |
+| 7     | Ingestion pipeline: HMAC endpoint (HKDF keys, ADR 15), Apps Script generator, archive/classify, quarantine UI, daily cron       | ✅ `6ac631d` — Tracsis parser v0 awaits sample emails                      |
+| 8     | Payroll engine, statutory UK, ExpectedPay projections, reconciliation, discrepancies                                            | ✅ `86dd5b0` — evidence-pack EXPORT still to build; verify seeds vs gov.uk |
+| 9     | Dashboard: stat cards, explanation trees UI, earnings chart, forecast, Realtime refresh                                         | ✅ `86dd5b0` — what-if panel + offline read cache outstanding              |
+| 10    | Notifications: in-app + Web Push with payroll-impact content, system health card                                                | ✅ this commit                                                             |
+| 11    | Test hardening: property tests ✅; E2E + axe, coverage targets                                                                  | partial — E2E/axe outstanding                                              |
+| 12    | Production deployment: vercel.json cron, runbook (`docs/deployment.md`) ✅; Sentry wiring, live deploy, cost-audit verification | partial                                                                    |
 
 Beyond the phases (each `[FUTURE]`, each requiring its own analysis before
 code):

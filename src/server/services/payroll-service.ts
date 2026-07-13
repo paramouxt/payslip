@@ -20,6 +20,7 @@ import { reconcileTotals } from '@/core/reconciliation/reconcile';
 import type { RealtimePublisher } from '@/server/integrations/realtime/publisher';
 import type { PayrollProjector } from '@/server/services/ingestion-service';
 import { createGlobalRepositories, createTenantRepositories } from '@/server/repositories';
+import { notifyUser } from '@/server/services/notification-service';
 import type { PayrollPeriodRecord } from '@/server/repositories/ports';
 import type { TenantContext } from '@/server/tenant';
 
@@ -224,13 +225,10 @@ export function createPayrollService({ db, realtime }: PayrollServiceDeps) {
       discrepancyCount = created.length;
       const material = created.filter((d) => d.severity !== 'INFO');
       if (material.length > 0) {
-        await repos.notifications.create({
-          type: 'DISCREPANCY_FOUND',
-          payload: {
-            periodId: period.id,
-            count: material.length,
-            summary: material[0]?.summary ?? '',
-          },
+        await notifyUser(db, tenant.userId, 'DISCREPANCY_FOUND', {
+          periodId: period.id,
+          count: material.length,
+          summary: material[0]?.summary ?? '',
         });
       }
     }

@@ -24,6 +24,7 @@ import {
   ingestionKeyVerificationHash,
   safeEqualHex,
 } from '@/server/security/crypto';
+import { notifyUser } from '@/server/services/notification-service';
 
 /**
  * The ingestion pipeline (constitution §11): verify → dedupe → archive raw →
@@ -308,9 +309,11 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           parseError:
             parseStatus === 'QUARANTINED' && typeof stats.reason === 'string' ? stats.reason : null,
         });
-        await repos.notifications.create({
-          type: 'ROTA_INGESTED',
-          payload: { emailId, subject: email.subject, classification, parseStatus },
+        await notifyUser(db, tenant.userId, 'ROTA_INGESTED', {
+          emailId,
+          subject: email.subject,
+          classification,
+          parseStatus,
         });
       } else if (employerSlug && classification === 'PAYSLIP') {
         parseStatus = 'QUARANTINED';
@@ -318,9 +321,9 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           status: parseStatus,
           parseError: 'PAYSLIP_PARSER_PENDING',
         });
-        await repos.notifications.create({
-          type: 'PAYSLIP_RECEIVED',
-          payload: { emailId, subject: email.subject },
+        await notifyUser(db, tenant.userId, 'PAYSLIP_RECEIVED', {
+          emailId,
+          subject: email.subject,
         });
       } else {
         await repos.emailMessages.setParseOutcome(emailId, { status: 'IGNORED' });

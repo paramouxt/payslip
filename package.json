@@ -61,6 +61,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/web-push": "^3.6.4",
     "eslint": "^9.30.0",
+    "fast-check": "^4.9.0",
     "prettier": "^3.6.0",
     "prisma": "^6.16.0",
     "tailwindcss": "^4.3.2",

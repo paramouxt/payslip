@@ -7,6 +7,7 @@ import { createTenantRepositories } from '@/server/repositories';
 import { createMailboxService } from '@/server/services/mailbox-service';
 import { createMailboxConnectionAction, rotateMailboxKeyAction } from '@/app/actions/mailbox';
 import { saveTaxProfileAction } from '@/app/actions/payslips';
+import { PushSubscribe } from '@/features/push/push-subscribe';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -208,6 +209,19 @@ export default async function SettingsPage() {
             Without a profile, deductions are estimated at £0 and the dashboard says so. Estimates
             are re-anchored to the YTD figures on every payslip you add.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            Rota changes, payslips, and discrepancies arrive in-app; enable Web Push to get them on
+            this device too — always with the payroll impact, not just the fact.
+          </p>
+          <PushSubscribe />
         </CardContent>
       </Card>
 

@@ -6,10 +6,13 @@ trail, computes expected pay through a configurable rules engine, estimates UK t
 National Insurance / pension, reconciles expectations against real payslips, and
 flags payroll mistakes — live, with £0/month running costs for a single user.
 
-> **Status:** Phase 5 delivered — schema + migration, statutory seeds, pure
-> domain core (Money, periods, Shift aggregate, rule DSL/engine, ingestion & AI
-> ports), tenant-scoped repositories, 57 tests incl. Postgres integration.
-> Next: Phase 6 (authentication + app shell). See `docs/` for the design record.
+> **Status:** Phases 1–10 built and tested (100+ tests incl. Postgres
+> integration and property tests). Live loop working end-to-end: signed email
+> push → archive → classify → quarantine/parse → shifts → payroll engine →
+> expected pay → payslip reconciliation → discrepancies → notifications.
+> Outstanding: Tracsis parser v1 (needs sample emails), E2E/axe suite, Sentry,
+> the production deploy itself (`docs/deployment.md`), and gov.uk verification
+> of statutory seeds. Constitution: `CLAUDE.md`.
 
 ## Getting started
 

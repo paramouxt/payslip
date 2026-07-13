@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/server/db';
 import { env } from '@/lib/env';
+import { notifyUser } from '@/server/services/notification-service';
 
 /**
  * Daily housekeeping (§9/§16). Auth mode: CRON_SECRET bearer token (Vercel
@@ -37,17 +38,11 @@ export async function GET(request: Request): Promise<NextResponse> {
       select: { id: true },
     });
     if (!recent) {
-      await prisma.notification.create({
-        data: {
-          userId: connection.userId,
-          type: 'SYSTEM_HEALTH',
-          payload: {
-            kind: 'FORWARDER_SILENT',
-            connectionId: connection.id,
-            label: connection.label,
-            lastEventAt: connection.lastEventAt?.toISOString() ?? null,
-          },
-        },
+      await notifyUser(prisma, connection.userId, 'SYSTEM_HEALTH', {
+        kind: 'FORWARDER_SILENT',
+        connectionId: connection.id,
+        label: connection.label,
+        lastEventAt: connection.lastEventAt?.toISOString() ?? null,
       });
     }
   }
