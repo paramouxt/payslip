@@ -42,6 +42,20 @@ export function roundToInt(value: number, mode: RoundingMode): number {
   }
 }
 
+/**
+ * Parse a user-entered pounds amount ("1,234.56", "£12") to integer pence
+ * using string arithmetic — no float ever touches the value.
+ */
+export function parsePoundsToPence(input: string): number {
+  const cleaned = input.trim().replace(/[£,\s]/g, '');
+  const match = /^(-)?(\d+)(?:\.(\d{1,2}))?$/.exec(cleaned);
+  if (!match) throw new DomainError(`not a money amount: ${input}`, 'INVALID_ARGUMENT');
+  const sign = match[1] ? -1 : 1;
+  const pounds = Number(match[2]);
+  const pence = Number((match[3] ?? '').padEnd(2, '0') || '0');
+  return sign * (pounds * 100 + pence);
+}
+
 export class Money {
   private constructor(
     readonly pence: number,

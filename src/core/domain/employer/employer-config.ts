@@ -49,6 +49,13 @@ export const roundingPolicySchema = z.object({
    *  during employer onboarding (Phase 3 §5). */
   level: z.literal('PER_SHIFT_COMPONENT'),
   mode: z.enum(['HALF_UP', 'HALF_EVEN', 'FLOOR', 'CEIL', 'TRUNCATE']),
+  /**
+   * How rolled-up holiday is computed: round the derived hourly rate first
+   * (matches how the evidenced employer presents it: £13.88 → £1.68/h), or
+   * apply the percentage to the component amount. Calibrated against a real
+   * payslip at onboarding.
+   */
+  holidayComputation: z.enum(['PER_HOUR_RATE', 'ON_COMPONENT_AMOUNT']).default('PER_HOUR_RATE'),
 });
 export type RoundingPolicy = z.infer<typeof roundingPolicySchema>;
 

@@ -5,6 +5,7 @@ import type { Shift, ShiftEventRecord } from '@/core/domain/shift/shift';
 import type { TenantContext } from '@/server/tenant';
 import type { ShiftRepository } from '../ports';
 import {
+  fromDbDate,
   serializeDiff,
   serializeSnapshot,
   shiftEventFromRow,
@@ -95,6 +96,20 @@ export function createPrismaShiftRepository(
         shift: shiftFromRow(row),
         events: row.events.map(shiftEventFromRow),
       };
+    },
+
+    async listRecentEvents(limit) {
+      const rows = await db.shiftEvent.findMany({
+        where: { userId },
+        orderBy: { recordedAt: 'desc' },
+        take: limit,
+        include: { shift: { select: { date: true } } },
+      });
+      return rows.map((row) => ({
+        ...shiftEventFromRow(row),
+        shiftId: row.shiftId,
+        shiftDate: fromDbDate(row.shift.date),
+      }));
     },
 
     async listBetween(from: IsoDate, to: IsoDate, filter) {

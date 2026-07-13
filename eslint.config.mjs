@@ -92,10 +92,12 @@ export default defineConfig(
     },
   },
   {
-    files: ['**/*.test.ts', 'tests/**/*.ts', 'prisma/seed.ts'],
+    // Tests, seeds, and dev scripts: pragmatic, not production surface.
+    files: ['**/*.test.ts', 'tests/**/*.ts', 'prisma/seed.ts', 'scripts/**/*.ts'],
     rules: {
       'no-console': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
     },
   }
 );

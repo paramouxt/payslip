@@ -12,8 +12,8 @@ import {
   createIngestionService,
   type IngestionService,
   type PayrollProjector,
-  noopPayrollProjector,
 } from '@/server/services/ingestion-service';
+import { createPayrollService, type PayrollService } from '@/server/services/payroll-service';
 
 /**
  * Composition root (§3): the only place infrastructure is chosen and wired.
@@ -24,7 +24,7 @@ const singletons: {
   storage?: ObjectStorage;
   realtime?: RealtimePublisher;
   ingestion?: IngestionService;
-  projector?: PayrollProjector;
+  payroll?: PayrollService;
 } = {};
 
 export function getStorage(): ObjectStorage {
@@ -37,9 +37,13 @@ export function getRealtime(): RealtimePublisher {
   return singletons.realtime;
 }
 
+export function getPayrollService(): PayrollService {
+  singletons.payroll ??= createPayrollService({ db: prisma, realtime: getRealtime() });
+  return singletons.payroll;
+}
+
 export function getPayrollProjector(): PayrollProjector {
-  singletons.projector ??= noopPayrollProjector; // replaced in Phase 8
-  return singletons.projector;
+  return getPayrollService().projector;
 }
 
 export function getIngestionService(): IngestionService {

@@ -4,6 +4,7 @@ import { createTenantRepositories } from '@/server/repositories';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Topbar } from '@/components/layout/topbar';
 import { CommandPalette } from '@/components/layout/command-palette';
+import { RealtimeRefresh } from '@/features/realtime/realtime-refresh';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const tenant = await requireTenant();
@@ -18,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
       <CommandPalette />
+      <RealtimeRefresh userId={tenant.userId} />
     </div>
   );
 }

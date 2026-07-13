@@ -65,6 +65,10 @@ export interface ShiftRepository {
   getById(id: string): Promise<Shift | null>;
   getWithHistory(id: string): Promise<{ shift: Shift; events: ShiftEventRecord[] } | null>;
   listBetween(from: IsoDate, to: IsoDate, filter?: { employerId?: string }): Promise<Shift[]>;
+  /** Latest events across all shifts — the dashboard's "recent changes" feed. */
+  listRecentEvents(
+    limit: number
+  ): Promise<(ShiftEventRecord & { shiftId: string; shiftDate: IsoDate })[]>;
 }
 
 export interface EmailMessageRecord {
@@ -174,6 +178,117 @@ export interface NotificationRepository {
   create(input: { type: string; payload: unknown }): Promise<NotificationRecord>;
   listUnread(): Promise<NotificationRecord[]>;
   markRead(id: string): Promise<void>;
+}
+
+export interface ExpectedPaySnapshot {
+  id: string;
+  payrollPeriodId: string;
+  computedAt: Date;
+  engineVersion: string;
+  ruleSetVersion: number | null;
+  statutoryConfigId: string | null;
+  ytdAnchorPayslipId: string | null;
+  grossPence: number;
+  taxPence: number;
+  niPence: number;
+  pensionPence: number;
+  netPence: number;
+  lines: unknown;
+}
+
+export interface ExpectedPayRepository {
+  /** Supersede current=true rows for the period (kept, flagged) and insert the new current. */
+  supersedeAndCreate(
+    input: Omit<ExpectedPaySnapshot, 'id' | 'computedAt'>
+  ): Promise<{ id: string }>;
+  currentForPeriod(payrollPeriodId: string): Promise<ExpectedPaySnapshot | null>;
+  historyForPeriod(payrollPeriodId: string): Promise<ExpectedPaySnapshot[]>;
+}
+
+export interface PayslipRecord {
+  id: string;
+  employerId: string;
+  contractId: string;
+  payrollPeriodId: string | null;
+  payDate: IsoDate;
+  grossPence: number;
+  taxPence: number;
+  niPence: number;
+  pensionPence: number;
+  netPence: number;
+  ytd: unknown;
+}
+
+export interface PayslipRepository {
+  create(
+    input: Omit<PayslipRecord, 'id'> & { sourceEmailId?: string | null }
+  ): Promise<PayslipRecord>;
+  list(): Promise<PayslipRecord[]>;
+  getById(id: string): Promise<PayslipRecord | null>;
+  forPeriod(payrollPeriodId: string): Promise<PayslipRecord | null>;
+  /** In-tax-year totals strictly before `payDate` for the YTD anchor. */
+  aggregateBefore(
+    employerId: string,
+    payDate: IsoDate,
+    taxYearStart: IsoDate
+  ): Promise<{
+    count: number;
+    sumGrossPence: number;
+    sumTaxPence: number;
+    latestId: string | null;
+    latestYtd: unknown;
+  }>;
+}
+
+export interface DiscrepancyRecord {
+  id: string;
+  payrollPeriodId: string;
+  payslipId: string | null;
+  kind: string;
+  severity: 'INFO' | 'MINOR' | 'MAJOR';
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'EXPECTED_WRONG';
+  expectedPence: number | null;
+  actualPence: number | null;
+  deltaPence: number;
+  summary: string;
+  createdAt: Date;
+}
+
+export interface DiscrepancyDraftInput {
+  kind: string;
+  severity: 'INFO' | 'MINOR' | 'MAJOR';
+  expectedPence: number;
+  actualPence: number;
+  deltaPence: number;
+  summary: string;
+  evidence: unknown;
+}
+
+export interface DiscrepancyRepository {
+  /** OPEN rows for the period are superseded by the fresh reconciliation;
+   *  human-touched rows (ACK/RESOLVED/EXPECTED_WRONG) are never removed. */
+  replaceOpenForPeriod(
+    payrollPeriodId: string,
+    payslipId: string | null,
+    drafts: DiscrepancyDraftInput[]
+  ): Promise<DiscrepancyRecord[]>;
+  list(filter?: { status?: DiscrepancyRecord['status'] }): Promise<DiscrepancyRecord[]>;
+  setStatus(id: string, status: DiscrepancyRecord['status']): Promise<void>;
+}
+
+export interface TaxProfileRecord {
+  jurisdiction: string;
+  taxYear: string;
+  taxCode: string;
+  taxBasis: 'CUMULATIVE' | 'WEEK1MONTH1';
+  niCategory: string;
+  pension: unknown;
+  studentLoan: string | null;
+}
+
+export interface TaxProfileRepository {
+  get(jurisdiction: string, taxYear: string): Promise<TaxProfileRecord | null>;
+  upsert(input: TaxProfileRecord): Promise<void>;
 }
 
 /** Global (not tenant-scoped): statutory tables are shared reference data. */

@@ -2,15 +2,25 @@ import type { PrismaClient } from '@prisma/client';
 import type { TenantContext } from '@/server/tenant';
 import type {
   ContractRepository,
+  DiscrepancyRepository,
   EmailMessageRepository,
   EmployerRepository,
+  ExpectedPayRepository,
   IngestConnectionLookup,
   MailboxConnectionRepository,
   NotificationRepository,
   PayrollPeriodRepository,
+  PayslipRepository,
   ShiftRepository,
   StatutoryConfigRepository,
+  TaxProfileRepository,
 } from './ports';
+import {
+  createPrismaDiscrepancyRepository,
+  createPrismaExpectedPayRepository,
+  createPrismaPayslipRepository,
+  createPrismaTaxProfileRepository,
+} from './prisma/payroll-projection-repositories';
 import { createPrismaContractRepository } from './prisma/contract-repository';
 import { createPrismaEmailMessageRepository } from './prisma/email-message-repository';
 import { createPrismaEmployerRepository } from './prisma/employer-repository';
@@ -30,6 +40,10 @@ export interface TenantRepositories {
   emailMessages: EmailMessageRepository;
   mailboxConnections: MailboxConnectionRepository;
   payrollPeriods: PayrollPeriodRepository;
+  expectedPay: ExpectedPayRepository;
+  payslips: PayslipRepository;
+  discrepancies: DiscrepancyRepository;
+  taxProfiles: TaxProfileRepository;
   notifications: NotificationRepository;
 }
 
@@ -45,6 +59,10 @@ export function createTenantRepositories(
     emailMessages: createPrismaEmailMessageRepository(db, tenant),
     mailboxConnections: createPrismaMailboxConnectionRepository(db, tenant),
     payrollPeriods: createPrismaPayrollPeriodRepository(db, tenant),
+    expectedPay: createPrismaExpectedPayRepository(db, tenant),
+    payslips: createPrismaPayslipRepository(db, tenant),
+    discrepancies: createPrismaDiscrepancyRepository(db, tenant),
+    taxProfiles: createPrismaTaxProfileRepository(db, tenant),
     notifications: createPrismaNotificationRepository(db, tenant),
   };
 }

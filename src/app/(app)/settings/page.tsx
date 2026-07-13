@@ -1,26 +1,34 @@
+import { fromUtcInstant } from '@/core/dates/iso-date';
+import { ukTaxYearOf } from '@/core/statutory/uk/tax-year';
 import { env } from '@/lib/env';
 import { requireTenant } from '@/server/auth/session';
 import { prisma } from '@/server/db';
 import { createTenantRepositories } from '@/server/repositories';
 import { createMailboxService } from '@/server/services/mailbox-service';
 import { createMailboxConnectionAction, rotateMailboxKeyAction } from '@/app/actions/mailbox';
+import { saveTaxProfileAction } from '@/app/actions/payslips';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input, Label } from '@/components/ui/input';
+import { Input, Label, Select } from '@/components/ui/input';
 
 export const metadata = { title: 'Settings' };
 export const dynamic = 'force-dynamic';
+
+const STUDENT_LOAN_PLANS = ['PLAN_1', 'PLAN_2', 'PLAN_4', 'PLAN_5', 'POSTGRAD'];
 
 export default async function SettingsPage() {
   const tenant = await requireTenant();
   const repos = createTenantRepositories(prisma, tenant);
   const mailboxService = createMailboxService(repos);
-  const [employers, connections, quarantined] = await Promise.all([
+  const { taxYear } = ukTaxYearOf(fromUtcInstant(new Date()));
+  const [employers, connections, quarantined, taxProfile] = await Promise.all([
     repos.employers.list(),
     repos.mailboxConnections.list(),
     repos.emailMessages.countByStatus('QUARANTINED'),
+    repos.taxProfiles.get('GB', taxYear),
   ]);
+  const pension = taxProfile?.pension as { employeePercent?: number } | null | undefined;
   const appUrl = env.AUTH_URL ?? 'http://localhost:3000';
 
   return (
@@ -117,6 +125,89 @@ export default async function SettingsPage() {
             </div>
             <Button type="submit">Connect mailbox</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tax profile — {taxYear} (estimates, not tax advice)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={saveTaxProfileAction} className="grid grid-cols-2 gap-3">
+            <input type="hidden" name="taxYear" value={taxYear} />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="taxCode">Tax code</Label>
+              <Input
+                id="taxCode"
+                name="taxCode"
+                placeholder="1257L"
+                defaultValue={taxProfile?.taxCode ?? ''}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="taxBasis">Basis</Label>
+              <Select
+                id="taxBasis"
+                name="taxBasis"
+                defaultValue={taxProfile?.taxBasis ?? 'CUMULATIVE'}
+              >
+                <option value="CUMULATIVE">Cumulative (normal)</option>
+                <option value="WEEK1MONTH1">Week 1 / Month 1</option>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="niCategory">NI category</Label>
+              <Input
+                id="niCategory"
+                name="niCategory"
+                placeholder="A"
+                defaultValue={taxProfile?.niCategory ?? 'A'}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="studentLoan">Student loan</Label>
+              <Select
+                id="studentLoan"
+                name="studentLoan"
+                defaultValue={taxProfile?.studentLoan ?? ''}
+              >
+                <option value="">None</option>
+                {STUDENT_LOAN_PLANS.map((p) => (
+                  <option key={p} value={p}>
+                    {p.replace('_', ' ')}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                id="pensionEnrolled"
+                name="pensionEnrolled"
+                type="checkbox"
+                defaultChecked={pension != null}
+                className="size-4"
+              />
+              <Label htmlFor="pensionEnrolled">Pension enrolled</Label>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pensionPercent">Employee %</Label>
+              <Input
+                id="pensionPercent"
+                name="pensionPercent"
+                inputMode="decimal"
+                defaultValue={pension?.employeePercent?.toString() ?? '5'}
+              />
+            </div>
+            <div className="col-span-2">
+              <Button type="submit">Save tax profile</Button>
+            </div>
+          </form>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Without a profile, deductions are estimated at £0 and the dashboard says so. Estimates
+            are re-anchored to the YTD figures on every payslip you add.
+          </p>
         </CardContent>
       </Card>
 

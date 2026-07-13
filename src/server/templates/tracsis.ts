@@ -49,6 +49,7 @@ export function buildTracsisEmployerTemplate(): EmployerConfig {
       version: 1,
       level: 'PER_SHIFT_COMPONENT',
       mode: 'HALF_UP',
+      holidayComputation: 'PER_HOUR_RATE',
     },
     senderPatterns: [{ fromDomain: 'tracsis.com' }],
     roles: [
