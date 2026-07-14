@@ -17,7 +17,22 @@ export async function createEmployerFromTracsisTemplate(formData: FormData): Pro
 
   const existing = await repos.employers.list();
   if (!existing.some((e) => e.slug === 'tracsis-events')) {
-    const { employerId } = await repos.employers.createFromConfig(buildTracsisEmployerTemplate());
+    const template = buildTracsisEmployerTemplate();
+    const rosterNames = new Set<string>();
+    const addName = (value: string | null | undefined) => {
+      const trimmed = value?.trim();
+      if (trimmed) rosterNames.add(trimmed);
+    };
+    addName(tenant.name);
+    const firstToken = tenant.name?.trim().split(/\s+/)[0] ?? null;
+    addName(firstToken);
+    const manualNames = formData.get('rosterNames');
+    if (typeof manualNames === 'string') {
+      for (const candidate of manualNames.split(/[\n,]/)) addName(candidate);
+    }
+    template.rosterNames = [...rosterNames];
+
+    const { employerId } = await repos.employers.createFromConfig(template);
     const startRaw = formData.get('startDate');
     const startDate =
       typeof startRaw === 'string' && startRaw.length > 0

@@ -52,6 +52,7 @@ export function buildTracsisEmployerTemplate(): EmployerConfig {
       holidayComputation: 'PER_HOUR_RATE',
     },
     senderPatterns: [{ fromDomain: 'tracsis.com' }],
+    rosterNames: [],
     roles: [
       { slug: 'hands-free', name: 'Hands-Free', defaultRateClassSlug: 'hands-free' },
       {

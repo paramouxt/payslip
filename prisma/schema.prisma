@@ -132,6 +132,7 @@ model Employer {
   payPeriodScheme Json // PayPeriodScheme document (core/domain/payroll-period)
   roundingPolicy  Json // per-component rounding rules
   senderPatterns  Json     @default("[]") // classifier hints: sender/subject patterns
+  rosterNames     Json     @default("[]") // parser hints for roster row matching
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

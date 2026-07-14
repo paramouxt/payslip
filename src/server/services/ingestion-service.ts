@@ -9,7 +9,7 @@ import { senderPatternSchema } from '@/core/domain/employer/employer-config';
 import { instantFromZoned } from '@/core/dates/zoned';
 import { addDays, compareIsoDates } from '@/core/dates/iso-date';
 import { resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
-import { Shift } from '@/core/domain/shift/shift';
+import { Shift, type ShiftDetails } from '@/core/domain/shift/shift';
 import { appsScriptPushProvider } from '@/server/integrations/mailbox/apps-script-push';
 import type { ObjectStorage } from '@/server/integrations/storage/object-storage';
 import type { RealtimePublisher } from '@/server/integrations/realtime/publisher';
@@ -82,33 +82,74 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       userId: string;
       employerId: string;
       timezone: string;
+      roleIdsBySlug: Record<string, string>;
       contractId: string;
       emailId: string;
       receivedAt: Date;
       candidates: CandidateShift[];
     }
-  ): Promise<{ created: number; ambiguous: number }> {
+  ): Promise<{ created: number; amended: number; unchanged: number; ambiguous: number }> {
     let created = 0;
+    let amended = 0;
+    let unchanged = 0;
     let ambiguous = 0;
     for (const candidate of input.candidates) {
       const startAt = instantFromZoned(candidate.date, candidate.startTime, input.timezone);
       let endDate = candidate.date;
       if (candidate.endTime <= candidate.startTime) endDate = addDays(candidate.date, 1);
       const endAt = instantFromZoned(endDate, candidate.endTime, input.timezone);
+      const roleId = candidate.roleSlug ? input.roleIdsBySlug[candidate.roleSlug] ?? null : null;
+      if (candidate.roleSlug && roleId === null) {
+        ambiguous += 1;
+        continue;
+      }
 
-      // Matching (v1): externalRef, else exact (date, startAt) on the contract.
-      // Anything fuzzier is Phase 7.1 with real corpora; ambiguity quarantines.
-      const sameDay = await repos.shifts.listBetween(candidate.date, candidate.date, {
+      const local = await repos.shifts.listBetween(addDays(candidate.date, -7), addDays(candidate.date, 7), {
         employerId: input.employerId,
       });
-      const match = sameDay.find((s) => {
-        const byRef = candidate.externalRef
-          ? s.snapshot.externalRef === candidate.externalRef
-          : false;
-        return byRef || s.snapshot.startAt.getTime() === startAt.getTime();
-      });
+      const byRef =
+        candidate.externalRef !== null
+          ? local.filter((s) => s.snapshot.externalRef === candidate.externalRef)
+          : [];
+      const byStart = local.filter((s) => s.snapshot.startAt.getTime() === startAt.getTime());
+      const matches = byRef.length > 0 ? byRef : byStart;
+      if (matches.length > 1) {
+        ambiguous += 1;
+        continue;
+      }
+      const match = matches[0] ?? null;
       if (match) {
-        ambiguous += 1; // update/diff flow needs fixtures; do not guess (§11)
+        let shift = match;
+        if (shift.status === 'CANCELLED') {
+          const reinstated = shift.reinstate({
+            sourceEmailId: input.emailId,
+            occurredAt: input.receivedAt,
+          });
+          await repos.shifts.applyEvent(reinstated.shift, reinstated.event);
+          shift = reinstated.shift;
+          amended += 1;
+        }
+
+        const changes: Partial<ShiftDetails> = {};
+        if (shift.snapshot.externalRef !== candidate.externalRef) changes.externalRef = candidate.externalRef;
+        if (shift.snapshot.date !== candidate.date) changes.date = candidate.date;
+        if (shift.snapshot.startAt.getTime() !== startAt.getTime()) changes.startAt = startAt;
+        if (shift.snapshot.endAt.getTime() !== endAt.getTime()) changes.endAt = endAt;
+        if (shift.snapshot.timezone !== input.timezone) changes.timezone = input.timezone;
+        if (shift.snapshot.roleId !== roleId) changes.roleId = roleId;
+        if (shift.snapshot.venue !== candidate.venue) changes.venue = candidate.venue;
+        if (shift.snapshot.notes !== candidate.notes) changes.notes = candidate.notes;
+
+        if (Object.keys(changes).length === 0) {
+          unchanged += 1;
+          continue;
+        }
+        const next = shift.amend(changes, {
+          sourceEmailId: input.emailId,
+          occurredAt: input.receivedAt,
+        });
+        await repos.shifts.applyEvent(next.shift, next.event);
+        amended += 1;
         continue;
       }
       const { shift, event } = Shift.create({
@@ -124,7 +165,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           startAt,
           endAt,
           timezone: input.timezone,
-          roleId: null,
+          roleId,
           venue: candidate.venue,
           notes: candidate.notes,
         },
@@ -133,7 +174,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       await repos.shifts.create(shift, event);
       created += 1;
     }
-    return { created, ambiguous };
+    return { created, amended, unchanged, ambiguous };
   }
 
   return {
@@ -230,6 +271,8 @@ export function createIngestionService(deps: IngestionServiceDeps) {
             senderPatterns: z.array(senderPatternSchema).parse(config?.config.senderPatterns ?? []),
             timezone: config?.config.timezone ?? 'Europe/London',
             scheme: config?.config.payPeriodScheme ?? null,
+            rosterNames: config?.config.rosterNames ?? [],
+            roleIdsBySlug: config?.roleIdsBySlug ?? {},
           };
         })
       );
@@ -261,7 +304,8 @@ export function createIngestionService(deps: IngestionServiceDeps) {
                 filename: a.filename,
                 mimeType: a.mimeType,
               })),
-            })
+          hints: { rosterNames: employer?.rosterNames ?? [] },
+        })
           : ({ ok: false, reason: 'NO_PARSER_REGISTERED' } as const);
 
         if (outcome.ok && employer) {
@@ -276,6 +320,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
               userId: tenant.userId,
               employerId: employer.employerId,
               timezone: employer.timezone,
+              roleIdsBySlug: employer.roleIdsBySlug,
               contractId: contract.id,
               emailId,
               receivedAt: email.receivedAt,
@@ -283,7 +328,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
             });
             stats.applied = applied;
             parseStatus = applied.ambiguous > 0 ? 'QUARANTINED' : 'PARSED';
-            if (employer.scheme && applied.created > 0) {
+            if (employer.scheme && applied.created + applied.amended > 0) {
               const dates = outcome.shifts.map((s) => s.date).sort(compareIsoDates);
               for (const date of dates) {
                 try {

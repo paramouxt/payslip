@@ -34,6 +34,14 @@ export default async function DashboardPage() {
                 <Label htmlFor="startDate">Contract start date</Label>
                 <Input id="startDate" name="startDate" type="date" defaultValue="2026-04-06" />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="rosterNames">Roster names (optional)</Label>
+                <Input
+                  id="rosterNames"
+                  name="rosterNames"
+                  placeholder="e.g. Divya, D. Patel"
+                />
+              </div>
               <Button type="submit">Add Tracsis Events</Button>
             </form>
           </CardContent>

@@ -62,6 +62,9 @@ export function classifyEmail(
   if (subject.includes('cancel')) {
     return { classification: 'CANCELLATION', employerSlug: employer.slug };
   }
+  if (subject.includes('confirmation of work') || subject.includes('confirmed work')) {
+    return { classification: 'ROTA', employerSlug: employer.slug };
+  }
   if (subject.includes('amend') || subject.includes('updated') || subject.includes('change')) {
     return { classification: 'ROTA_CHANGE', employerSlug: employer.slug };
   }
@@ -69,7 +72,8 @@ export function classifyEmail(
     subject.includes('rota') ||
     subject.includes('shift') ||
     subject.includes('schedule') ||
-    subject.includes('deployment')
+    subject.includes('deployment') ||
+    subject.includes('hfs')
   ) {
     return { classification: 'ROTA', employerSlug: employer.slug };
   }

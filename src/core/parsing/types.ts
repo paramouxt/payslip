@@ -11,6 +11,9 @@ export interface RotaParseInput {
   plaintextBody: string | null;
   htmlBody: string | null;
   attachments: { filename: string; mimeType: string }[];
+  hints?: {
+    rosterNames?: string[];
+  };
 }
 
 /** A parser's proposal for one shift — the pipeline prices and applies it. */

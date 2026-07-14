@@ -74,6 +74,7 @@ export const employerConfigSchema = z.object({
   payPeriodScheme: payPeriodSchemeSchema,
   roundingPolicy: roundingPolicySchema,
   senderPatterns: z.array(senderPatternSchema).default([]),
+  rosterNames: z.array(z.string().min(1)).default([]),
   roles: z.array(roleSpecSchema).min(1),
   rateClasses: z.array(rateClassSpecSchema).min(1),
   rules: z.array(ruleSchema).default([]),
