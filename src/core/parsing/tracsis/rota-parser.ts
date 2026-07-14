@@ -63,10 +63,20 @@ function htmlText(input: string): string {
     .replace(/<\/p>/gi, '\n')
     .replace(/<\/tr>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
+    .replace(/&(nbsp|amp|lt|gt);/gi, (entity) => {
+      switch (entity.toLowerCase()) {
+        case '&nbsp;':
+          return ' ';
+        case '&amp;':
+          return '&';
+        case '&lt;':
+          return '<';
+        case '&gt;':
+          return '>';
+        default:
+          return entity;
+      }
+    })
     .replace(/\r/g, '')
     .replace(/[ \t]+/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
@@ -151,8 +161,20 @@ function cellText(input: string): string {
   return input
     .replace(/<br\s*\/?>/gi, ' / ')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
+    .replace(/&(nbsp|amp|lt|gt);/gi, (entity) => {
+      switch (entity.toLowerCase()) {
+        case '&nbsp;':
+          return ' ';
+        case '&amp;':
+          return '&';
+        case '&lt;':
+          return '<';
+        case '&gt;':
+          return '>';
+        default:
+          return entity;
+      }
+    })
     .replace(/\s+/g, ' ')
     .trim();
 }
