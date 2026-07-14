@@ -85,10 +85,13 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       contractId: string;
       emailId: string;
       receivedAt: Date;
+      roleIdsBySlug: Record<string, string>;
       candidates: CandidateShift[];
     }
-  ): Promise<{ created: number; ambiguous: number }> {
+  ): Promise<{ created: number; amended: number; unchanged: number; ambiguous: number }> {
     let created = 0;
+    let amended = 0;
+    let unchanged = 0;
     let ambiguous = 0;
     for (const candidate of input.candidates) {
       const startAt = instantFromZoned(candidate.date, candidate.startTime, input.timezone);
@@ -96,21 +99,48 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       if (candidate.endTime <= candidate.startTime) endDate = addDays(candidate.date, 1);
       const endAt = instantFromZoned(endDate, candidate.endTime, input.timezone);
 
-      // Matching (v1): externalRef, else exact (date, startAt) on the contract.
-      // Anything fuzzier is Phase 7.1 with real corpora; ambiguity quarantines.
+      const roleId = candidate.roleSlug ? (input.roleIdsBySlug[candidate.roleSlug] ?? null) : null;
+      if (candidate.roleSlug && !roleId) {
+        ambiguous += 1; // parser emitted a role this employer doesn't define
+        continue;
+      }
+
+      // Matching, strongest key first: externalRef (stable across restated
+      // confirmations) → same role on the same date (one shift per role per
+      // day in the evidenced formats) → identical start instant.
       const sameDay = await repos.shifts.listBetween(candidate.date, candidate.date, {
         employerId: input.employerId,
       });
-      const match = sameDay.find((s) => {
-        const byRef = candidate.externalRef
-          ? s.snapshot.externalRef === candidate.externalRef
-          : false;
-        return byRef || s.snapshot.startAt.getTime() === startAt.getTime();
-      });
+      const match =
+        (candidate.externalRef
+          ? sameDay.find((s) => s.snapshot.externalRef === candidate.externalRef)
+          : undefined) ??
+        (roleId ? sameDay.find((s) => s.snapshot.roleId === roleId) : undefined) ??
+        sameDay.find((s) => s.snapshot.startAt.getTime() === startAt.getTime());
+
       if (match) {
-        ambiguous += 1; // update/diff flow needs fixtures; do not guess (§11)
+        if (match.status === 'CANCELLED') {
+          // The source restates a shift we hold as cancelled: a human must
+          // decide (reinstate vs stale email) — never guess (§11).
+          ambiguous += 1;
+          continue;
+        }
+        const sameTimes =
+          match.snapshot.startAt.getTime() === startAt.getTime() &&
+          match.snapshot.endAt.getTime() === endAt.getTime();
+        if (sameTimes) {
+          unchanged += 1; // idempotent restatement
+          continue;
+        }
+        const { shift, event } = match.amend(
+          { startAt, endAt },
+          { sourceEmailId: input.emailId, occurredAt: input.receivedAt }
+        );
+        await repos.shifts.applyEvent(shift, event);
+        amended += 1;
         continue;
       }
+
       const { shift, event } = Shift.create({
         identity: {
           id: crypto.randomUUID(),
@@ -124,7 +154,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           startAt,
           endAt,
           timezone: input.timezone,
-          roleId: null,
+          roleId,
           venue: candidate.venue,
           notes: candidate.notes,
         },
@@ -133,7 +163,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       await repos.shifts.create(shift, event);
       created += 1;
     }
-    return { created, ambiguous };
+    return { created, amended, unchanged, ambiguous };
   }
 
   return {
@@ -230,6 +260,8 @@ export function createIngestionService(deps: IngestionServiceDeps) {
             senderPatterns: z.array(senderPatternSchema).parse(config?.config.senderPatterns ?? []),
             timezone: config?.config.timezone ?? 'Europe/London',
             scheme: config?.config.payPeriodScheme ?? null,
+            rosterNames: config?.config.rosterNames ?? [],
+            roleIdsBySlug: config?.roleIdsBySlug ?? {},
           };
         })
       );
@@ -261,6 +293,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
                 filename: a.filename,
                 mimeType: a.mimeType,
               })),
+              selfIdentifiers: employer?.rosterNames ?? [],
             })
           : ({ ok: false, reason: 'NO_PARSER_REGISTERED' } as const);
 
@@ -279,11 +312,13 @@ export function createIngestionService(deps: IngestionServiceDeps) {
               contractId: contract.id,
               emailId,
               receivedAt: email.receivedAt,
+              roleIdsBySlug: employer.roleIdsBySlug,
               candidates: outcome.shifts,
             });
             stats.applied = applied;
             parseStatus = applied.ambiguous > 0 ? 'QUARANTINED' : 'PARSED';
-            if (employer.scheme && applied.created > 0) {
+            if (applied.ambiguous > 0) stats.reason = 'APPLY_AMBIGUITY';
+            if (employer.scheme && applied.created + applied.amended > 0) {
               const dates = outcome.shifts.map((s) => s.date).sort(compareIsoDates);
               for (const date of dates) {
                 try {

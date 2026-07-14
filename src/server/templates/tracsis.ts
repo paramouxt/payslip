@@ -52,6 +52,9 @@ export function buildTracsisEmployerTemplate(): EmployerConfig {
       holidayComputation: 'PER_HOUR_RATE',
     },
     senderPatterns: [{ fromDomain: 'tracsis.com' }],
+    // Template ships empty: the person's roster name is theirs, not the
+    // employer's. Onboarding seeds it from the signed-in profile.
+    rosterNames: [],
     roles: [
       { slug: 'hands-free', name: 'Hands-Free', defaultRateClassSlug: 'hands-free' },
       {

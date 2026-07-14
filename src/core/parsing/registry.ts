@@ -1,5 +1,5 @@
 import type { RotaParser } from './types';
-import { tracsisRotaParserV0 } from './tracsis/rota-parser';
+import { tracsisRotaParserV1 } from './tracsis/rota-parser';
 
 /**
  * Parser registry — the one sanctioned home for per-employer *code* (§12).
@@ -20,6 +20,6 @@ export class ParserRegistry {
 
 export function buildDefaultParserRegistry(): ParserRegistry {
   const registry = new ParserRegistry();
-  registry.register(tracsisRotaParserV0);
+  registry.register(tracsisRotaParserV1);
   return registry;
 }

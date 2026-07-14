@@ -8,6 +8,40 @@ verified, and anything a deployer must do.
 
 ## Unreleased (branch `claude/workforce-payroll-platform-c2x0f9`)
 
+### 2026-07-14 — Milestone 1: Tracsis rota parser v1 (Phase 7 complete)
+
+**What changed**
+
+- `tracsis-rota` parser v1.0.0, built from a real anonymised corpus
+  (`tests/fixtures/tracsis/`) covering both formats the employer sends:
+  - **Confirmation of Work** (`eventjobs@`): per-event shift lines
+    `DD/MM/YYYY HH:MM - HH:MM HH:MMhrs`; role from the event title; internal
+    cross-checks (per-shift stated duration and stated total vs the parsed
+    shifts) must hold or the email is refused as self-contradictory.
+  - **HFS weekly grid** (site manager): whole-team HTML table; the parser
+    selects the tenant's row via configured `rosterNames` (refuses when zero
+    or multiple rows match), reads seven (start,end) day pairs, and treats
+    `RP`/marker cells as non-HFS days. Plaintext is lossy for this table —
+    HTML is parsed.
+- Pipeline upgrades the corpus made necessary:
+  - Restated confirmations (each email repeats the full shift set) are
+    **idempotent**: unchanged shifts produce no events; changed times become
+    evidence-carrying `AMENDED` events; matching key is externalRef → (date,
+    role) → start instant; cancelled-shift restatements quarantine for human
+    decision.
+  - Parser role slugs now resolve to role ids so Reserved Parking vs
+    Hands-Free shifts price at their correct rates.
+  - Classifier mechanisms learned two generic keywords: "confirmation of
+    work" (rota) and "revised" (rota change).
+  - `Employer.rosterNames` column (+ migration) — onboarding seeds it with
+    the signed-in name.
+- Parser v0 stays registered-runnable for archive re-parse comparisons.
+
+**Verification**: 124 tests green (19 new: 13 parser-unit incl. refusal
+paths, 3 classifier, 5 Postgres integration incl. restatement idempotency,
+amendment evidence, cross-source grid/confirmation agreement, and roster-name
+quarantine); lint, typecheck, production build clean.
+
 ### 2026-07-13 — Statutory seeds verified against gov.uk (Milestone 3 groundwork)
 
 **What changed**

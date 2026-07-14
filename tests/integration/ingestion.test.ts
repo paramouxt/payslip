@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
-import { ParserRegistry } from '@/core/parsing/registry';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { buildDefaultParserRegistry, ParserRegistry } from '@/core/parsing/registry';
 import type { RotaParser } from '@/core/parsing/types';
 import { isoDate } from '@/core/dates/iso-date';
 import { createMemoryStorage } from '@/server/integrations/storage/object-storage';
@@ -243,5 +245,253 @@ describe.skipIf(!url)('ingestion pipeline (Postgres)', () => {
       receivedAt: new Date(),
     });
     expect(result).toMatchObject({ status: 'REJECTED', reason: 'BAD_SIGNATURE' });
+  });
+});
+
+/**
+ * The REAL Tracsis parser (v1) end-to-end: fixture emails through the full
+ * pipeline — creation, idempotent restatement, amendment-with-evidence, and
+ * cross-source consistency between confirmations and the weekly HFS grid.
+ */
+describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () => {
+  let db: PrismaClient;
+  let repos: TenantRepositories;
+  let storage: ReturnType<typeof createMemoryStorage>;
+  let connectionId: string;
+  let userId: string;
+  let employerId: string;
+
+  const fixture = (name: string): string =>
+    readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'tracsis', name), 'utf8');
+
+  function makeService() {
+    return createIngestionService({
+      db,
+      storage,
+      realtime: noopRealtimePublisher,
+      registry: buildDefaultParserRegistry(),
+    });
+  }
+
+  function signedPush(payload: object) {
+    const rawBody = JSON.stringify(payload);
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const key = deriveIngestionKey(connectionId, 1);
+    return {
+      headers: {
+        'x-shiftsync-timestamp': ts,
+        'x-shiftsync-signature': hmacSha256Hex(key, `${ts}.${rawBody}`),
+      },
+      rawBody,
+      receivedAt: new Date(),
+    };
+  }
+
+  function tracsisEmail(options: {
+    subject: string;
+    fromAddress: string;
+    plaintextBody?: string;
+    htmlBody?: string;
+  }) {
+    return {
+      connectionId,
+      message: {
+        providerMessageId: `m-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+        subject: options.subject,
+        fromAddress: options.fromAddress,
+        plaintextBody: options.plaintextBody ?? null,
+        htmlBody: options.htmlBody ?? null,
+        attachments: [],
+      },
+    };
+  }
+
+  beforeAll(async () => {
+    db = new PrismaClient({ datasourceUrl: url });
+    storage = createMemoryStorage();
+    const user = await db.user.create({
+      data: { email: `parser-${randomUUID()}@test.local` },
+    });
+    userId = user.id;
+    repos = createTenantRepositories(db, { userId });
+    const created = await repos.employers.createFromConfig({
+      ...buildTracsisEmployerTemplate(),
+      rosterNames: ['Alex Rowan'],
+    });
+    employerId = created.employerId;
+    await repos.contracts.create({ employerId, startDate: isoDate('2026-04-06') });
+    const mailbox = createMailboxService(repos);
+    const connection = await mailbox.createAppsScriptConnection({ label: 'Parser Gmail' });
+    connectionId = connection.id;
+  });
+
+  afterAll(async () => {
+    await db.$disconnect();
+  });
+
+  it('creates every shift from a Reserved Parking confirmation, priced-ready with the right role', async () => {
+    const service = makeService();
+    const result = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'Tracsis Events - Confirmation of Work',
+          fromAddress: 'eventjobs@tracsis.com',
+          plaintextBody: fixture('confirmation-reserved-parking.txt'),
+        })
+      )
+    );
+    expect(result).toMatchObject({
+      status: 'ACCEPTED',
+      classification: 'ROTA',
+      parseStatus: 'PARSED',
+    });
+
+    const shifts = await repos.shifts.listBetween(isoDate('2026-07-01'), isoDate('2026-07-19'), {
+      employerId,
+    });
+    expect(shifts).toHaveLength(9);
+    const config = await repos.employers.getConfig(employerId);
+    const rpRoleId = config!.roleIdsBySlug['reserved-parking'];
+    expect(rpRoleId).toBeDefined();
+    expect(shifts.every((s) => s.snapshot.roleId === rpRoleId)).toBe(true);
+    expect(shifts.every((s) => s.snapshot.externalRef?.startsWith('cow:'))).toBe(true);
+  });
+
+  it('a restated confirmation is idempotent: no new shifts, no new events', async () => {
+    const service = makeService();
+    const result = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'Tracsis Events - Confirmation of Work',
+          fromAddress: 'eventjobs@tracsis.com',
+          plaintextBody: fixture('confirmation-reserved-parking.txt'),
+        })
+      )
+    );
+    expect(result).toMatchObject({ status: 'ACCEPTED', parseStatus: 'PARSED' });
+    const shifts = await repos.shifts.listBetween(isoDate('2026-07-01'), isoDate('2026-07-19'), {
+      employerId,
+    });
+    expect(shifts).toHaveLength(9);
+    expect(shifts.every((s) => s.version === 1)).toBe(true);
+  });
+
+  it('a revised confirmation amends the changed shift with the email as evidence', async () => {
+    const service = makeService();
+    const revised = fixture('confirmation-reserved-parking.txt').replace(
+      '01/07/2026 12:00 - 21:00 09:00hrs',
+      '01/07/2026 13:00 - 22:00 09:00hrs'
+    );
+    const result = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'Tracsis Events - Confirmation of Work',
+          fromAddress: 'eventjobs@tracsis.com',
+          plaintextBody: revised,
+        })
+      )
+    );
+    expect(result).toMatchObject({ status: 'ACCEPTED', parseStatus: 'PARSED' });
+
+    const day = await repos.shifts.listBetween(isoDate('2026-07-01'), isoDate('2026-07-01'), {
+      employerId,
+    });
+    expect(day).toHaveLength(1);
+    expect(day[0]!.version).toBe(2);
+    const history = await repos.shifts.getWithHistory(day[0]!.id);
+    const amendment = history!.events.find((e) => e.kind === 'AMENDED');
+    expect(amendment).toBeDefined();
+    expect(amendment!.sourceEmailId).not.toBeNull();
+
+    const others = await repos.shifts.listBetween(isoDate('2026-07-02'), isoDate('2026-07-19'), {
+      employerId,
+    });
+    expect(others.every((s) => s.version === 1)).toBe(true);
+  });
+
+  it('the HFS grid agrees with an already-ingested Hands-Free confirmation (cross-source match)', async () => {
+    const service = makeService();
+    const confirmation = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'Tracsis Events - Confirmation of Work',
+          fromAddress: 'eventjobs@tracsis.com',
+          plaintextBody: fixture('confirmation-hands-free.txt'),
+        })
+      )
+    );
+    expect(confirmation).toMatchObject({ status: 'ACCEPTED', parseStatus: 'PARSED' });
+
+    // 2026-07-12 now carries BOTH roles (real double-booking in the corpus):
+    // Reserved Parking 09:00–18:00 and Hands-Free 11:00–18:00 — different
+    // natural keys, so both stand until a payslip settles it.
+    const doubled = await repos.shifts.listBetween(isoDate('2026-07-12'), isoDate('2026-07-12'), {
+      employerId,
+    });
+    expect(doubled).toHaveLength(2);
+
+    const grid = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'HFS Rota positions (29/06/2026- 05/07/2026) REVISED',
+          fromAddress: 'site.manager@tracsis.com',
+          htmlBody: fixture('hfs-grid-revised.html'),
+        })
+      )
+    );
+    expect(grid).toMatchObject({
+      status: 'ACCEPTED',
+      classification: 'ROTA_CHANGE',
+      parseStatus: 'PARSED',
+    });
+
+    // The grid's only self-row time pair (Sun 05/07 10:00–19:00) matches the
+    // confirmation's shift by (date, role): unchanged, not duplicated.
+    const sunday = await repos.shifts.listBetween(isoDate('2026-07-05'), isoDate('2026-07-05'), {
+      employerId,
+    });
+    expect(sunday).toHaveLength(1);
+    expect(sunday[0]!.version).toBe(1);
+  });
+
+  it('quarantines a grid when no roster name matches', async () => {
+    const stranger = await db.user.create({
+      data: { email: `parser2-${randomUUID()}@test.local` },
+    });
+    const strangerRepos = createTenantRepositories(db, { userId: stranger.id });
+    const created = await strangerRepos.employers.createFromConfig({
+      ...buildTracsisEmployerTemplate(),
+      rosterNames: ['Somebody Else Entirely'],
+    });
+    await strangerRepos.contracts.create({
+      employerId: created.employerId,
+      startDate: isoDate('2026-04-06'),
+    });
+    const mailbox = createMailboxService(strangerRepos);
+    const connection = await mailbox.createAppsScriptConnection({ label: 'Stranger Gmail' });
+
+    const rawBody = JSON.stringify({
+      connectionId: connection.id,
+      message: {
+        providerMessageId: `m-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+        subject: 'HFS Rota positions (29/06/2026- 05/07/2026)',
+        fromAddress: 'site.manager@tracsis.com',
+        htmlBody: fixture('hfs-grid-revised.html'),
+        attachments: [],
+      },
+    });
+    const ts = Math.floor(Date.now() / 1000).toString();
+    const key = deriveIngestionKey(connection.id, 1);
+    const result = await makeService().receivePush({
+      headers: {
+        'x-shiftsync-timestamp': ts,
+        'x-shiftsync-signature': hmacSha256Hex(key, `${ts}.${rawBody}`),
+      },
+      rawBody,
+      receivedAt: new Date(),
+    });
+    expect(result).toMatchObject({ status: 'ACCEPTED', parseStatus: 'QUARANTINED' });
   });
 });

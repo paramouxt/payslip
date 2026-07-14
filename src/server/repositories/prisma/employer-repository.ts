@@ -34,6 +34,7 @@ export function createPrismaEmployerRepository(
             payPeriodScheme: config.payPeriodScheme,
             roundingPolicy: config.roundingPolicy,
             senderPatterns: config.senderPatterns,
+            rosterNames: config.rosterNames,
           },
         });
 
@@ -119,6 +120,7 @@ export function createPrismaEmployerRepository(
         payPeriodScheme: row.payPeriodScheme,
         roundingPolicy: row.roundingPolicy,
         senderPatterns: row.senderPatterns,
+        rosterNames: row.rosterNames,
         roles: row.roles.map((r) => ({
           slug: r.slug,
           name: r.name,

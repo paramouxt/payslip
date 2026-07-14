@@ -10,7 +10,7 @@ flags payroll mistakes — live, with £0/month running costs for a single user.
 > integration and property tests). Live loop working end-to-end: signed email
 > push → archive → classify → quarantine/parse → shifts → payroll engine →
 > expected pay → payslip reconciliation → discrepancies → notifications.
-> Outstanding: Tracsis parser v1 (needs sample emails), E2E/axe suite, Sentry,
+> Outstanding: Tracsis payslip parser (Milestone 2), E2E/axe suite, Sentry,
 > and the production deploy itself (`docs/deployment.md`). Statutory seeds
 > verified against gov.uk (2026-07-13). Constitution: `CLAUDE.md`.
 

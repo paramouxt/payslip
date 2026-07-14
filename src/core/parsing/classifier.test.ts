@@ -26,6 +26,22 @@ describe('classifyEmail', () => {
     expect(classifyEmail(email('Christmas party!'), employers).classification).toBe('PAY_COMMS');
   });
 
+  it('classifies the real Tracsis subjects from the fixture corpus', () => {
+    expect(
+      classifyEmail(
+        email('Tracsis Events - Confirmation of Work', 'eventjobs@tracsis.com'),
+        employers
+      ).classification
+    ).toBe('ROTA');
+    expect(
+      classifyEmail(email('HFS Rota positions (29/06/2026- 05/07/2026)'), employers).classification
+    ).toBe('ROTA');
+    expect(
+      classifyEmail(email('HFS Rota positions (29/06/2026- 05/07/2026) REVISED'), employers)
+        .classification
+    ).toBe('ROTA_CHANGE');
+  });
+
   it('ignores mail from unmatched senders', () => {
     expect(classifyEmail(email('Rota attached', 'spam@evil.example'), employers)).toEqual({
       classification: 'OTHER',

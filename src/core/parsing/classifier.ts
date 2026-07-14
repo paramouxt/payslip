@@ -62,14 +62,20 @@ export function classifyEmail(
   if (subject.includes('cancel')) {
     return { classification: 'CANCELLATION', employerSlug: employer.slug };
   }
-  if (subject.includes('amend') || subject.includes('updated') || subject.includes('change')) {
+  if (
+    subject.includes('amend') ||
+    subject.includes('updated') ||
+    subject.includes('change') ||
+    subject.includes('revised')
+  ) {
     return { classification: 'ROTA_CHANGE', employerSlug: employer.slug };
   }
   if (
     subject.includes('rota') ||
     subject.includes('shift') ||
     subject.includes('schedule') ||
-    subject.includes('deployment')
+    subject.includes('deployment') ||
+    subject.includes('confirmation of work')
   ) {
     return { classification: 'ROTA', employerSlug: employer.slug };
   }

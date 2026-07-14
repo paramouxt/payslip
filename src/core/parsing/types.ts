@@ -11,6 +11,13 @@ export interface RotaParseInput {
   plaintextBody: string | null;
   htmlBody: string | null;
   attachments: { filename: string; mimeType: string }[];
+  /**
+   * Names this tenant's person goes by on team-wide rotas (employer config
+   * `rosterNames`). Grid-style rotas list the whole team; a parser needs
+   * these to select the right row — and must refuse, never guess, when no
+   * row or more than one row matches.
+   */
+  selfIdentifiers: string[];
 }
 
 /** A parser's proposal for one shift — the pipeline prices and applies it. */

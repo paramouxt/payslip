@@ -74,6 +74,13 @@ export const employerConfigSchema = z.object({
   payPeriodScheme: payPeriodSchemeSchema,
   roundingPolicy: roundingPolicySchema,
   senderPatterns: z.array(senderPatternSchema).default([]),
+  /**
+   * Names this tenant's person appears as on team-wide rota grids. Grid
+   * parsers refuse (quarantine) rather than guess when no configured name —
+   * or more than one row — matches. Populated at onboarding; row matching is
+   * case-insensitive containment.
+   */
+  rosterNames: z.array(z.string().min(1)).default([]),
   roles: z.array(roleSpecSchema).min(1),
   rateClasses: z.array(rateClassSpecSchema).min(1),
   rules: z.array(ruleSchema).default([]),

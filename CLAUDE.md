@@ -53,7 +53,9 @@ branch the session was assigned (currently
 is called done.
 
 **Current position on the roadmap (see §17): Phases 1–10 built and tested.
-Phase 7's Tracsis parser is v0 (quarantine-everything) pending sample emails;
+Phase 7's Tracsis parser is v1 — built 2026-07-14 from a real anonymised
+corpus (Confirmation of Work emails + the weekly HFS grid), fixture-tested,
+with restatement idempotency and evidence-carrying amendments;
 Phase 11 has property tests but E2E+axe outstanding; Phase 12 has config +
 runbook (`docs/deployment.md`) but Sentry wiring and the production deploy
 itself outstanding. Statutory seeds verified against gov.uk 2026-07-13.**
@@ -262,7 +264,7 @@ when new directories appear.
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | **Roster**                    | `core/domain/shift`, `core/domain/payroll-period`                                                     | `[BUILT]`                                    | Shifts as event-sourced aggregates; pay-period schemes and period math                                                      |
 | **Payroll**                   | `core/domain/rules`, `core/money`, (Phase 8: `core/payroll`, `core/statutory`, `core/reconciliation`) | rules+money `[BUILT]`, engines `[SPECIFIED]` | Rate-class resolution, pay computation, statutory estimation, payslip reconciliation, discrepancies                         |
-| **Email Ingestion**           | `core/ingestion` (port `[BUILT]`), `server/integrations/mailbox`, `core/parsing` (Phase 7)            | port `[BUILT]`, pipeline `[SPECIFIED]`       | Receive → archive raw → classify → parse → diff → apply events; quarantine for anything unparseable                         |
+| **Email Ingestion**           | `core/ingestion` (port `[BUILT]`), `server/integrations/mailbox`, `core/parsing` (Phase 7)            | `[BUILT]` incl. Tracsis parser v1            | Receive → archive raw → classify → parse → diff → apply events; quarantine for anything unparseable                         |
 | **Employer Config / Plugins** | `core/domain/employer` `[BUILT]`, `server/templates` `[BUILT]`                                        | `[BUILT]`, parser plugins `[SPECIFIED]`      | Everything an employer defines (§12)                                                                                        |
 | **Authentication & Tenancy**  | `server/auth` (Phase 6), `server/tenant.ts` `[BUILT]`                                                 | tenancy `[BUILT]`, auth `[SPECIFIED]`        | Google sign-in (basic scopes only), sessions, TenantContext construction                                                    |
 | **AI**                        | `core/ai` (ports `[BUILT]`), `server/ai`                                                              | `[SPECIFIED — post Phase 9]`                 | Narration, forecasting, recommendations, NL queries — under §6 law                                                          |
@@ -660,7 +662,7 @@ Every employer plugin defines:
 | Pay-period scheme (+ overrides)    | data                                                         | `[BUILT]`               |
 | Rounding policy                    | data                                                         | `[BUILT]`               |
 | Email sender patterns              | data                                                         | `[BUILT]`               |
-| Rota email parser                  | versioned code module in the parser registry, fixture-tested | `[SPECIFIED — Phase 7]` |
+| Rota email parser                  | versioned code module in the parser registry, fixture-tested | `[BUILT — v1]`          |
 | Payslip parser                     | same pattern                                                 | `[SPECIFIED — Phase 8]` |
 | Validation & onboarding template   | config + golden payslip check (rounding calibration)         | `[SPECIFIED]`           |
 
