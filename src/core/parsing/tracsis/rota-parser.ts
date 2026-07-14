@@ -1,4 +1,4 @@
-import { addDays, isoDate } from '@/core/dates/iso-date';
+import { addDays, isoDate, type IsoDate } from '@/core/dates/iso-date';
 import type { CandidateShift, RotaParseOutcome, RotaParser } from '../types';
 
 const monthIndex: Record<string, number> = {
@@ -31,7 +31,7 @@ function parseTime(raw: string): string | null {
   return `${pad2(hours)}:${pad2(minutes)}`;
 }
 
-function parseDateToken(raw: string, fallbackYear: number): string | null {
+function parseDateToken(raw: string, fallbackYear: number): IsoDate | null {
   const compact = raw.replace(/,/g, ' ').replace(/\s+/g, ' ').trim();
   const slash = /^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$/.exec(compact);
   if (slash) {
@@ -47,7 +47,9 @@ function parseDateToken(raw: string, fallbackYear: number): string | null {
   const named = /^(\d{1,2})\s+([A-Za-z]{3,9})(?:\s+(\d{2,4}))?$/.exec(compact);
   if (!named) return null;
   const day = Number(named[1]);
-  const month = monthIndex[named[2].slice(0, 3).toLowerCase()];
+  const monthKey = named[2]?.slice(0, 3).toLowerCase();
+  if (!monthKey) return null;
+  const month = monthIndex[monthKey];
   if (!month) return null;
   const yearRaw = named[3] ? Number(named[3]) : fallbackYear;
   const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
@@ -86,10 +88,11 @@ function parseClaimedTotalHours(text: string): number | null {
 }
 
 function hoursBetween(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  let startMin = sh * 60 + sm;
-  let endMin = eh * 60 + em;
+  const startParts = /^(\d{2}):(\d{2})$/.exec(start);
+  const endParts = /^(\d{2}):(\d{2})$/.exec(end);
+  if (!startParts || !endParts) return 0;
+  const startMin = Number(startParts[1]) * 60 + Number(startParts[2]);
+  let endMin = Number(endParts[1]) * 60 + Number(endParts[2]);
   if (endMin <= startMin) endMin += 24 * 60;
   return (endMin - startMin) / 60;
 }
@@ -116,7 +119,7 @@ function parseConfirmation(input: {
     if (claimed !== null && Math.abs(claimed - hoursBetween(startTime, endTime)) > 0.02) {
       return { ok: false, reason: 'CONTRADICTORY_ARITHMETIC' };
     }
-    const line = match[0] ?? '';
+    const line = match[0];
     const externalRef =
       /(?:ref(?:erence)?|job(?:\s*id)?)\s*[:#]?\s*([A-Z0-9-]{4,})/i.exec(line)?.[1] ??
       defaultExternalRef;
@@ -154,10 +157,11 @@ function cellText(input: string): string {
     .trim();
 }
 
-function parseWeeklyStart(subject: string, receivedAt: Date): string | null {
+function parseWeeklyStart(subject: string, receivedAt: Date): IsoDate | null {
   const m = /(?:w\/c|week(?:\s+commencing)?)\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)/i.exec(subject);
-  if (!m) return null;
-  return parseDateToken(m[1], receivedAt.getUTCFullYear());
+  const value = m?.[1];
+  if (!value) return null;
+  return parseDateToken(value, receivedAt.getUTCFullYear());
 }
 
 function normalizeName(name: string): string {
@@ -193,8 +197,11 @@ function parseHfsGrid(input: {
     if (/^\s*rp\s*$/i.test(raw)) continue;
     const time = /(\d{1,2}[:.]\d{2})\s*[-–]\s*(\d{1,2}[:.]\d{2})/.exec(raw);
     if (!time) continue;
-    const startTime = parseTime(time[1]);
-    const endTime = parseTime(time[2]);
+    const startRaw = time[1];
+    const endRaw = time[2];
+    if (!startRaw || !endRaw) continue;
+    const startTime = parseTime(startRaw);
+    const endTime = parseTime(endRaw);
     if (!startTime || !endTime) continue;
     shifts.push({
       externalRef: null,
