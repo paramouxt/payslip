@@ -37,7 +37,7 @@ export default async function SignInPage() {
               </Button>
             </form>
           ) : (
-            <p className="text-sm text-warning">
+            <p className="text-sm font-medium text-foreground">
               Google sign-in is not configured (set AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET).
             </p>
           )}

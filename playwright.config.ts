@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const port = 3101;
-const baseURL = `http://127.0.0.1:${port.toString()}`;
+const baseURL = `http://localhost:${port.toString()}`;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -20,6 +20,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
+      AUTH_URL: baseURL,
       DEV_AUTH_EMAIL: process.env.DEV_AUTH_EMAIL ?? 'e2e@example.test',
       AUTH_SECRET:
         process.env.AUTH_SECRET ??
