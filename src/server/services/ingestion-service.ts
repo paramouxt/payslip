@@ -8,7 +8,12 @@ import type { CandidateShift, EmailClassificationKind } from '@/core/parsing/typ
 import { senderPatternSchema } from '@/core/domain/employer/employer-config';
 import { instantFromZoned } from '@/core/dates/zoned';
 import { addDays, compareIsoDates } from '@/core/dates/iso-date';
-import { resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
+import { periodsBetween, resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
+import {
+  PdfTextExtractionError,
+  unpdfTextExtractor,
+  type DocumentTextExtractor,
+} from '@/server/integrations/documents/pdf-text';
 import { Shift } from '@/core/domain/shift/shift';
 import { appsScriptPushProvider } from '@/server/integrations/mailbox/apps-script-push';
 import type { ObjectStorage } from '@/server/integrations/storage/object-storage';
@@ -57,11 +62,13 @@ export interface IngestionServiceDeps {
   realtime: RealtimePublisher;
   registry: ParserRegistry;
   projector?: PayrollProjector;
+  documentTextExtractor?: DocumentTextExtractor;
 }
 
 export function createIngestionService(deps: IngestionServiceDeps) {
   const { db, storage, realtime, registry } = deps;
   const projector = deps.projector ?? noopPayrollProjector;
+  const documentTextExtractor = deps.documentTextExtractor ?? unpdfTextExtractor;
   const globals = createGlobalRepositories(db);
 
   async function verify(request: PushRequest) {
@@ -237,13 +244,22 @@ export function createIngestionService(deps: IngestionServiceDeps) {
         email.rawMimeBase64 ? 'message/rfc822' : 'application/json'
       );
       let archivedBytes = rawBuffer.byteLength;
+      const archivedAttachments: {
+        filename: string;
+        mimeType: string;
+        storageKey: string;
+        content: Uint8Array;
+      }[] = [];
       for (const [i, att] of (email.attachments ?? []).entries()) {
         const content = Buffer.from(att.contentBase64, 'base64');
-        await storage.put(
-          `email-attachments/${tenant.userId}/${emailId}/${i.toString()}-${att.filename}`,
+        const storageKey = `email-attachments/${tenant.userId}/${emailId}/${i.toString()}-${att.filename}`;
+        await storage.put(storageKey, content, att.mimeType);
+        archivedAttachments.push({
+          filename: att.filename,
+          mimeType: att.mimeType,
+          storageKey,
           content,
-          att.mimeType
-        );
+        });
         archivedBytes += content.byteLength;
       }
       await repos.emailMessages.setArchive(emailId, rawKey, archivedBytes);
@@ -351,14 +367,114 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           parseStatus,
         });
       } else if (employerSlug && classification === 'PAYSLIP') {
+        const employer = employerPatterns.find((item) => item.slug === employerSlug);
+        const parser = registry.findPayslipParser(employerSlug);
+        const pdfs = archivedAttachments.filter(
+          (attachment) =>
+            attachment.mimeType === 'application/pdf' || /\.pdf$/i.test(attachment.filename)
+        );
         parseStatus = 'QUARANTINED';
+
+        if (!employer) {
+          stats.reason = 'EMPLOYER_NOT_FOUND';
+        } else if (!parser) {
+          stats.reason = 'NO_PAYSLIP_PARSER_REGISTERED';
+        } else if (pdfs.length !== 1) {
+          stats.reason = pdfs.length === 0 ? 'PAYSLIP_PDF_NOT_FOUND' : 'MULTIPLE_PAYSLIP_PDFS';
+        } else {
+          const pdf = pdfs[0];
+          if (!pdf) {
+            stats.reason = 'PAYSLIP_PDF_NOT_FOUND';
+          } else {
+            try {
+              const textContent = await documentTextExtractor.extractPdfText(pdf.content);
+              const outcome = parser.parse({
+                filename: pdf.filename,
+                mimeType: pdf.mimeType,
+                textContent,
+              });
+              if (!outcome.ok) {
+                stats.reason = outcome.reason;
+              } else if (!employer.scheme) {
+                stats.reason = 'PAY_PERIOD_SCHEME_NOT_CONFIGURED';
+              } else {
+                const contracts = await repos.contracts.listByEmployer(employer.employerId);
+                const activeContracts = contracts.filter((contract) => contract.endDate === null);
+                const contract = activeContracts[0];
+                if (activeContracts.length !== 1 || !contract) {
+                  stats.reason = 'AMBIGUOUS_CONTRACT';
+                } else {
+                  const spans = periodsBetween(
+                    employer.scheme,
+                    addDays(outcome.payslip.payDate, -45),
+                    outcome.payslip.payDate
+                  );
+                  const span =
+                    spans.find((item) => item.payDate === outcome.payslip.payDate) ?? null;
+                  if (!span) {
+                    stats.reason = 'PAY_PERIOD_NOT_FOUND';
+                  } else {
+                    const period = await repos.payrollPeriods.ensure(employer.employerId, span);
+                    const existing = await repos.payslips.forPeriod(period.id);
+                    const sameAsExisting =
+                      existing !== null &&
+                      existing.payDate === outcome.payslip.payDate &&
+                      existing.grossPence === outcome.payslip.grossPence &&
+                      existing.taxPence === outcome.payslip.taxPence &&
+                      existing.niPence === outcome.payslip.niPence &&
+                      existing.pensionPence === outcome.payslip.pensionPence &&
+                      existing.netPence === outcome.payslip.netPence;
+
+                    if (existing && !sameAsExisting) {
+                      stats.reason = 'PAYSLIP_PERIOD_CONFLICT';
+                    } else {
+                      if (!existing) {
+                        const saved = await repos.payslips.create({
+                          employerId: employer.employerId,
+                          contractId: contract.id,
+                          payrollPeriodId: period.id,
+                          sourceEmailId: emailId,
+                          documentStorageKey: pdf.storageKey,
+                          payDate: outcome.payslip.payDate,
+                          grossPence: outcome.payslip.grossPence,
+                          taxPence: outcome.payslip.taxPence,
+                          niPence: outcome.payslip.niPence,
+                          pensionPence: outcome.payslip.pensionPence,
+                          netPence: outcome.payslip.netPence,
+                          ytd: outcome.payslip.ytd,
+                          lines: outcome.payslip.lines,
+                        });
+                        stats.payslipId = saved.id;
+                        await projector.recomputePeriodsTouching(
+                          tenant.userId,
+                          employer.employerId,
+                          [outcome.payslip.payDate]
+                        );
+                      } else {
+                        stats.idempotentPayslip = true;
+                      }
+                      parseStatus = 'PARSED';
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              stats.reason =
+                error instanceof PdfTextExtractionError ? error.code : 'PDF_TEXT_EXTRACTION_FAILED';
+            }
+          }
+        }
+
         await repos.emailMessages.setParseOutcome(emailId, {
           status: parseStatus,
-          parseError: 'PAYSLIP_PARSER_PENDING',
+          parserId: parser?.id ?? null,
+          parserVersion: parser?.version ?? null,
+          parseError:
+            parseStatus === 'QUARANTINED' && typeof stats.reason === 'string' ? stats.reason : null,
         });
         await notifyUser(db, tenant.userId, 'PAYSLIP_RECEIVED', {
           emailId,
-          subject: email.subject,
+          parseStatus,
         });
       } else {
         await repos.emailMessages.setParseOutcome(emailId, { status: 'IGNORED' });

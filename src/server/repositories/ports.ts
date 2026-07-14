@@ -210,6 +210,7 @@ export interface PayslipRecord {
   employerId: string;
   contractId: string;
   payrollPeriodId: string | null;
+  documentStorageKey: string | null;
   payDate: IsoDate;
   grossPence: number;
   taxPence: number;
@@ -217,11 +218,16 @@ export interface PayslipRecord {
   pensionPence: number;
   netPence: number;
   ytd: unknown;
+  lines: unknown;
 }
 
 export interface PayslipRepository {
   create(
-    input: Omit<PayslipRecord, 'id'> & { sourceEmailId?: string | null }
+    input: Omit<PayslipRecord, 'id' | 'documentStorageKey' | 'lines'> & {
+      sourceEmailId?: string | null;
+      documentStorageKey?: string | null;
+      lines?: unknown;
+    }
   ): Promise<PayslipRecord>;
   list(): Promise<PayslipRecord[]>;
   getById(id: string): Promise<PayslipRecord | null>;

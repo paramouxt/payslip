@@ -270,6 +270,9 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
       storage,
       realtime: noopRealtimePublisher,
       registry: buildDefaultParserRegistry(),
+      documentTextExtractor: {
+        extractPdfText: () => Promise.resolve(fixture('payslip-period-13.txt')),
+      },
     });
   }
 
@@ -455,6 +458,50 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
     expect(sunday[0]!.version).toBe(1);
   });
 
+  it('imports an archived payslip PDF and treats an identical re-forward as idempotent', async () => {
+    const service = makeService();
+    const payslipEmail = () => ({
+      connectionId,
+      message: {
+        providerMessageId: `m-${randomUUID()}`,
+        receivedAt: new Date().toISOString(),
+        subject: 'Tracsis payslip',
+        fromAddress: 'eventjobs@tracsis.com',
+        plaintextBody: null,
+        htmlBody: null,
+        attachments: [
+          {
+            filename: 'payslip.pdf',
+            mimeType: 'application/pdf',
+            contentBase64: Buffer.from('synthetic integration fixture').toString('base64'),
+          },
+        ],
+      },
+    });
+
+    const first = await service.receivePush(signedPush(payslipEmail()));
+    expect(first).toMatchObject({
+      status: 'ACCEPTED',
+      classification: 'PAYSLIP',
+      parseStatus: 'PARSED',
+    });
+
+    const payslips = await repos.payslips.list();
+    expect(payslips).toHaveLength(1);
+    expect(payslips[0]).toMatchObject({
+      employerId,
+      payDate: '2026-07-01',
+      grossPence: 94_548,
+      netPence: 81_176,
+    });
+    expect(Array.isArray(payslips[0]?.lines)).toBe(true);
+    expect(payslips[0]?.documentStorageKey).toMatch(new RegExp(`^email-attachments/${userId}/`));
+    expect(storage.keys()).toContain(payslips[0]?.documentStorageKey);
+
+    const forwarded = await service.receivePush(signedPush(payslipEmail()));
+    expect(forwarded).toMatchObject({ status: 'ACCEPTED', parseStatus: 'PARSED' });
+    expect(await repos.payslips.list()).toHaveLength(1);
+  });
   it('quarantines a grid when no roster name matches', async () => {
     const stranger = await db.user.create({
       data: { email: `parser2-${randomUUID()}@test.local` },

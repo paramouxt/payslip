@@ -8,6 +8,47 @@ verified, and anything a deployer must do.
 
 ## Unreleased (branch `claude/workforce-payroll-platform-c2x0f9`)
 
+### 2026-07-14 — Milestone 2: payslip ingestion and release hardening
+
+**What changed**
+
+- `tracsis-payslip` parser v1.0.0, derived from three supplied payslips.
+  The real PDFs remain outside Git; anonymised text fixtures preserve the
+  document structure and printed arithmetic.
+- Pure parsing maps TIERBV2H/TIERBV4H wages and holiday pay to configured role
+  slugs, stores integer-pence line evidence, and refuses unknown codes,
+  missing totals, gross mismatches, deduction/net mismatches, and impossible
+  YTD totals.
+- Ingestion now archives the PDF first, extracts text through a server-only
+  `unpdf` adapter, links the private storage key to the payslip, resolves the
+  payroll period, triggers reconciliation, quarantines conflicts, and treats
+  identical re-forwards as idempotent.
+- Sentry Next.js instrumentation is wired for browser, server, edge, request
+  errors, global React errors, releases, and optional source-map upload.
+  Monitoring is off without a DSN. A tested `beforeSend` boundary strips
+  identity/request data, secrets, email-like strings, payroll values, and
+  unsafe exception messages while retaining type and stack location.
+- Playwright + axe smoke coverage now checks unauthenticated redirect, dev
+  authentication, and the main app routes; CI runs the production build and
+  browser check against its disposable Postgres service.
+- Constitution v1.1 adopts owner-approved risk-based validation and greater
+  agent autonomy, with explicit pauses for real evidence, credentials,
+  destructive actions, and irreversible choices.
+- Removed the hard-coded personal email from the dev ingestion helper.
+
+**Verification**
+
+- All three supplied PDFs decode and parse successfully without emitting
+  identifying content.
+- Local: lint, typecheck, production build, and 112 non-database tests green.
+  The 21 Postgres tests are skipped locally because this host has no Postgres
+  or Docker; CI runs all 133 tests plus the authenticated Playwright/axe smoke.
+
+**Deployer action**
+
+- The remaining live deployment needs the Vercel, Supabase, Google OAuth,
+  VAPID, and optional Sentry values listed in `docs/deployment.md`.
+
 ### 2026-07-14 — Milestone 1: Tracsis rota parser v1 (Phase 7 complete)
 
 **What changed**

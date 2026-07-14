@@ -6,13 +6,14 @@ trail, computes expected pay through a configurable rules engine, estimates UK t
 National Insurance / pension, reconciles expectations against real payslips, and
 flags payroll mistakes — live, with £0/month running costs for a single user.
 
-> **Status:** Phases 1–10 built and tested (100+ tests incl. Postgres
-> integration and property tests). Live loop working end-to-end: signed email
-> push → archive → classify → quarantine/parse → shifts → payroll engine →
-> expected pay → payslip reconciliation → discrepancies → notifications.
-> Outstanding: Tracsis payslip parser (Milestone 2), E2E/axe suite, Sentry,
-> and the production deploy itself (`docs/deployment.md`). Statutory seeds
-> verified against gov.uk (2026-07-13). Constitution: `CLAUDE.md`.
+> **Status:** Core product, Tracsis rota + payslip ingestion, risk-sized
+> Playwright/axe smoke coverage, and privacy-scrubbed Sentry wiring are built.
+> Live loop: signed email push → immutable archive → rota/payslip parsing →
+> shifts + payroll projections → reconciliation → discrepancies →
+> notifications. The remaining external step is the live Vercel/Supabase/
+> Google/Sentry deployment (`docs/deployment.md`), which needs account
+> credentials. Statutory seeds verified against gov.uk (2026-07-13).
+> Constitution: `CLAUDE.md`.
 
 ## Getting started
 

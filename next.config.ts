@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import withSerwistInit from '@serwist/next';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const withSerwist = withSerwistInit({
   swSrc: 'src/app/sw.ts',
@@ -20,4 +21,16 @@ const nextConfig: NextConfig = {
   headers: () => Promise.resolve([{ source: '/(.*)', headers: securityHeaders }]),
 };
 
-export default withSerwist(nextConfig);
+const sentryBuildConfigured = Boolean(
+  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+);
+
+export default withSentryConfig(withSerwist(nextConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  telemetry: false,
+  sourcemaps: { disable: !sentryBuildConfigured },
+  webpack: { treeshake: { removeDebugLogging: true, removeTracing: true } },
+});

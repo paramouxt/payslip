@@ -41,3 +41,53 @@ export interface RotaParser {
   readonly employerSlug: string;
   parse(input: RotaParseInput): RotaParseOutcome;
 }
+
+/** Text-only payslip input. PDF decoding is an integration concern. */
+export interface PayslipParseInput {
+  filename: string;
+  mimeType: string;
+  textContent: string;
+}
+
+export type PayslipLineKind = 'BASE' | 'HOLIDAY';
+
+/** Employer-labelled earning line, preserving printed arithmetic as evidence. */
+export interface CandidatePayslipLine {
+  code: string;
+  roleSlug: string;
+  kind: PayslipLineKind;
+  /** Decimal hours scaled by 100 (for example 7.50 hours is 750). */
+  hoursHundredths: number;
+  ratePence: number;
+  amountPence: number;
+}
+
+/** A parser proposal. Every monetary value is integer pence. */
+export interface CandidatePayslip {
+  payDate: IsoDate;
+  taxPeriod: number;
+  taxCode: string;
+  paymentPeriod: string;
+  grossPence: number;
+  taxPence: number;
+  niPence: number;
+  pensionPence: number;
+  netPence: number;
+  ytd: {
+    grossPence: number;
+    taxPence: number;
+    niPence: number;
+    pensionPence: number;
+  };
+  lines: CandidatePayslipLine[];
+}
+
+export type PayslipParseOutcome =
+  { ok: true; payslip: CandidatePayslip; confidence: number } | { ok: false; reason: string };
+
+export interface PayslipParser {
+  readonly id: string;
+  readonly version: string;
+  readonly employerSlug: string;
+  parse(input: PayslipParseInput): PayslipParseOutcome;
+}

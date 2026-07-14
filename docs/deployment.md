@@ -48,6 +48,8 @@ pnpm exec web-push generate-vapid-keys
 | `SUPABASE_STORAGE_BUCKET`                                                 | `shiftsync-evidence`                                                                         |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`              | from §1 (realtime client)                                                                    |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | from §3 (public key twice)                                                                   |
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN`                                   | Sentry project DSN (same value server/client); omit both to disable monitoring               |
+| `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN`                     | build-time source-map upload credentials; token is never exposed to the browser              |
 
 3. Migrations + seed (run locally against production, once per release with
    schema changes):
@@ -65,7 +67,7 @@ Never `migrate dev` or `db push` against production (§16).
 3. Settings → **Connect mailbox** → follow the Apps Script instructions shown
    (paste into script.google.com in the account that receives rotas, run
    `setup()` once). Send yourself a test email matching the query.
-4. Add your latest payslip (with YTD figures) to anchor the tax estimates.
+4. Forward a Tracsis payslip PDF to import it automatically (manual entry remains a fallback).
 
 ## 6. Operations
 
@@ -77,9 +79,10 @@ Never `migrate dev` or `db push` against production (§16).
   script (old signatures die instantly).
 - **Backups**: Supabase free has no PITR — `pg_dump` monthly or accept the
   risk; upgrade to Pro (£25/mo) when this stops being acceptable.
-- **Error tracking (SPECIFIED, not yet wired)**: Sentry free tier with PII
-  scrubbing per §7 — add `@sentry/nextjs`, DSN env var, and `beforeSend`
-  stripping email bodies/amounts before going live to real users.
+- **Error tracking**: Sentry is wired but disabled when the DSN is absent.
+  `beforeSend` removes user/request data, secrets, email-like strings, payroll
+  values, and unsafe exception messages. Keep `sendDefaultPii=false`; never
+  attach raw mail or documents to Sentry events.
 
 ## 7. Going commercial (the recorded cost wall)
 

@@ -92,6 +92,7 @@ export function createPrismaPayslipRepository(
     employerId: string;
     contractId: string;
     payrollPeriodId: string | null;
+    documentStorageKey: string | null;
     payDate: Date;
     grossPence: number;
     taxPence: number;
@@ -99,6 +100,7 @@ export function createPrismaPayslipRepository(
     pensionPence: number;
     netPence: number;
     ytd: unknown;
+    lines: unknown;
   }): PayslipRecord {
     return { ...row, payDate: fromDbDate(row.payDate) };
   }
@@ -112,6 +114,7 @@ export function createPrismaPayslipRepository(
           contractId: input.contractId,
           payrollPeriodId: input.payrollPeriodId,
           sourceEmailId: input.sourceEmailId ?? null,
+          documentStorageKey: input.documentStorageKey ?? null,
           payDate: toDbDate(input.payDate),
           grossPence: input.grossPence,
           taxPence: input.taxPence,
@@ -119,7 +122,7 @@ export function createPrismaPayslipRepository(
           pensionPence: input.pensionPence,
           netPence: input.netPence,
           ytd: (input.ytd ?? null) as Prisma.InputJsonValue,
-          lines: [] as Prisma.InputJsonValue,
+          lines: input.lines ?? [],
         },
       });
       return toRecord(row);

@@ -25,6 +25,9 @@ const envSchema = z.object({
 
   CRON_SECRET: z.string().optional(),
 
+  SENTRY_DSN: z.string().url().optional(),
+  SENTRY_RELEASE: z.string().optional(),
+
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
   /** Private bucket for raw email + payslip documents. */

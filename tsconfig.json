@@ -37,6 +37,7 @@
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "*.config.ts",
+    "instrumentation*.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": ["node_modules"]

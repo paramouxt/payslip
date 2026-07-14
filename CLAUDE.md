@@ -49,16 +49,18 @@ pnpm lint && pnpm typecheck && pnpm test
 
 Development happens on feature branches; the remote-session convention is the
 branch the session was assigned (currently
-`claude/workforce-payroll-platform-c2x0f9`). CI must be green before a phase
-is called done.
+`claude/workforce-payroll-platform-c2x0f9`). Validation is proportional to
+change risk: payroll, parser, persistence, auth, and privacy changes need
+strong evidence; low-risk copy and presentation work does not require ritual
+full-suite testing.
 
-**Current position on the roadmap (see §17): Phases 1–10 built and tested.
-Phase 7's Tracsis parser is v1 — built 2026-07-14 from a real anonymised
-corpus (Confirmation of Work emails + the weekly HFS grid), fixture-tested,
-with restatement idempotency and evidence-carrying amendments;
-Phase 11 has property tests but E2E+axe outstanding; Phase 12 has config +
-runbook (`docs/deployment.md`) but Sentry wiring and the production deploy
-itself outstanding. Statutory seeds verified against gov.uk 2026-07-13.**
+**Current position on the roadmap (see §17): the core product is built.
+Phase 7 has Tracsis rota and payslip parsers v1, built 2026-07-14 from real
+anonymised corpora with refusal checks, evidence links, and idempotency.
+Phase 11 has property tests plus a risk-sized Playwright/axe smoke suite.
+Phase 12 has config, runbook (`docs/deployment.md`), and privacy-scrubbed
+Sentry wiring; the production deploy itself remains external and requires
+account credentials. Statutory seeds verified against gov.uk 2026-07-13.**
 
 ---
 
@@ -561,7 +563,7 @@ payroll disputes_ first, dashboards second.
   ingestion pipeline run carries a **correlation id** (the `IngestionRun`
   id) stamped on every log line and stored on affected rows' provenance.
   No PII (§7). `console.log` is lint-banned outside tests/seeds.
-- **Errors**: Sentry free tier `[SPECIFIED — Phase 12]` with PII scrubbing
+- **Errors**: Sentry free tier `[BUILT — Phase 12]` with PII scrubbing
   and release tagging (git SHA).
 - **Health checks** `[SPECIFIED — Phase 7/10]`: the daily cron doubles as
   the heartbeat — DB keep-alive (Supabase free pauses after 7 idle days),
@@ -596,7 +598,7 @@ Target: **WCAG 2.2 AA**, verified, not asserted.
   alone (icon + sign + text).
 - Dark and light mode both first-class (`prefers-color-scheme` + toggle).
 - Touch targets ≥ 44px on mobile; the audience checks rotas on phones.
-- Testing: axe checks inside Playwright E2E `[SPECIFIED — Phase 11]` plus a
+- Testing: axe checks inside Playwright E2E `[BUILT — Phase 11]` plus a
   manual keyboard-only pass per major screen before a phase closes.
 
 ---
@@ -744,16 +746,27 @@ auth routes). Public API is `[FUTURE]`.
   pushed history on shared branches.
 - **PRs:** description = what + why + trade-offs + testing evidence. Reviewer
   (human or future session) must be able to verify claims from the PR alone.
-- **Definition of done** for any change: lint ✓ typecheck ✓ tests (incl. new
-  ones proving the change) ✓ docs/constitution updated if a decision changed
-  ✓ no unexplained dependency or schema drift.
+- **Definition of done:** the requested outcome works, the validation matches
+  its risk, docs/constitution are updated when decisions change, and dependency
+  or schema drift is explained. Full lint + typecheck + test is required for
+  release-wide or high-risk changes, not as ceremony for every small edit.
 
 ---
 
 ## 15. Testing Strategy
 
-The pyramid is deliberately bottom-heavy because the product's value is in
-pure engines, which are cheap to test exhaustively.
+Testing protects trust; it is not a reason to stall useful work. Choose the
+smallest validation that gives credible evidence for the change:
+
+- **High risk:** payroll calculations, money rounding, parsers, persistence,
+  tenancy, auth/security, privacy, migrations, and reconciliation require
+  focused automated tests plus lint and typecheck. Run the full relevant suite
+  before publishing.
+- **Medium risk:** application flows and integrations require focused tests or
+  an end-to-end smoke check, plus typecheck when TypeScript changed.
+- **Low risk:** copy, docs, styles, and contained presentation changes may be
+  validated by inspection, rendering, or a targeted command. Do not run the
+  entire suite without a concrete risk it addresses.
 
 - **Unit (core)** `[BUILT — 100+ tests]`: money rounding law, calendar
   math (incl. DST and leap years), pay-period schemes (incl. the April-2026
@@ -772,12 +785,14 @@ pure engines, which are cheap to test exhaustively.
   isolation (asserted for every repository — a repo without an isolation
   test is unreviewable), optimistic concurrency, idempotent ingestion,
   replay-equals-projection. CI runs these against a service container.
-- **E2E (Playwright)** `[SPECIFIED — Phase 11, smoke earlier]`: auth,
-  simulated-push ingestion → dashboard, quarantine resolution, rule editing
-  with the rule tester, evidence pack export. Axe accessibility checks ride
-  along (§10).
-- **Regression:** any bug that reaches `main` gets a failing test before the
-  fix. No exceptions — this is how the corpus of trust grows.
+- **E2E (Playwright)** `[BUILT — Phase 11 smoke]`: unauthenticated redirect,
+  dev-auth session, primary-route rendering, and serious/critical axe checks.
+  Add deeper ingestion and editing flows when they protect a changed journey;
+  do not maintain speculative browser scripts.
+- **Regression:** bugs in high-risk or repeatedly fragile behaviour get a
+  failing test before the fix. One-off low-risk presentation defects may use
+  a focused manual/render check when an automated test would merely restate
+  markup.
 - **Performance** `[SPECIFIED — Phase 9+]`: Lighthouse budget checks;
   engine benchmarks only if a real slowness appears (don't benchmark
   speculatively).
@@ -786,7 +801,7 @@ pure engines, which are cheap to test exhaustively.
   depend on wall-clock time (time is always a parameter).
 
 CI (`.github/workflows/ci.yml` `[BUILT]`): install → generate → migrate →
-seed → lint → typecheck → tests, on every push and PR. Keep it under ten
+seed → lint → typecheck → tests → production build → E2E/axe, on every push and PR. Keep it under ten
 minutes; parallelise before weakening it.
 
 ---
@@ -833,18 +848,18 @@ situation.
 
 The 12-phase plan (phase-4 §12) with live status:
 
-| Phase | Scope                                                                                                                           | Status                                                                     |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| 1–3   | Requirements, challenged assumptions, improvements                                                                              | ✅ `docs/phase-1..3`                                                       |
-| 4     | Architecture (+v1.1 refinements: provider-agnostic ingestion, rich domain, AI context, PWA)                                     | ✅ `docs/phase-4`                                                          |
-| 5     | Schema + migration, statutory seeds, domain core, tenant-scoped repositories, CI                                                | ✅ `5efe6f6`                                                               |
-| 6     | Auth.js Google sign-in, app shell, protected routes, PWA scaffold, composition root                                             | ✅ `1e2a9ba`                                                               |
-| 7     | Ingestion pipeline: HMAC endpoint (HKDF keys, ADR 15), Apps Script generator, archive/classify, quarantine UI, daily cron       | ✅ `6ac631d` — Tracsis parser v0 awaits sample emails                      |
-| 8     | Payroll engine, statutory UK, ExpectedPay projections, reconciliation, discrepancies                                            | ✅ `86dd5b0` — evidence-pack EXPORT still to build; verify seeds vs gov.uk |
-| 9     | Dashboard: stat cards, explanation trees UI, earnings chart, forecast, Realtime refresh                                         | ✅ `86dd5b0` — what-if panel + offline read cache outstanding              |
-| 10    | Notifications: in-app + Web Push with payroll-impact content, system health card                                                | ✅ this commit                                                             |
-| 11    | Test hardening: property tests ✅; E2E + axe, coverage targets                                                                  | partial — E2E/axe outstanding                                              |
-| 12    | Production deployment: vercel.json cron, runbook (`docs/deployment.md`) ✅; Sentry wiring, live deploy, cost-audit verification | partial                                                                    |
+| Phase | Scope                                                                                                          | Status                                                                     |
+| ----- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1–3   | Requirements, challenged assumptions, improvements                                                             | ✅ `docs/phase-1..3`                                                       |
+| 4     | Architecture (+v1.1 refinements: provider-agnostic ingestion, rich domain, AI context, PWA)                    | ✅ `docs/phase-4`                                                          |
+| 5     | Schema + migration, statutory seeds, domain core, tenant-scoped repositories, CI                               | ✅ `5efe6f6`                                                               |
+| 6     | Auth.js Google sign-in, app shell, protected routes, PWA scaffold, composition root                            | ✅ `1e2a9ba`                                                               |
+| 7     | Ingestion pipeline: HMAC endpoint, archive/classify, Tracsis rota + payslip parsers, quarantine UI, daily cron | ✅ rota + payslip v1 from anonymised real corpora                          |
+| 8     | Payroll engine, statutory UK, ExpectedPay projections, reconciliation, discrepancies                           | ✅ `86dd5b0` — evidence-pack EXPORT still to build; verify seeds vs gov.uk |
+| 9     | Dashboard: stat cards, explanation trees UI, earnings chart, forecast, Realtime refresh                        | ✅ `86dd5b0` — what-if panel + offline read cache outstanding              |
+| 10    | Notifications: in-app + Web Push with payroll-impact content, system health card                               | ✅ this commit                                                             |
+| 11    | Test hardening: property tests; risk-sized Playwright + axe smoke                                              | ✅ built                                                                   |
+| 12    | Production deployment: config/runbook, Sentry wiring, live deploy, cost-audit verification                     | partial — code ready; live accounts/credentials required                   |
 
 Beyond the phases (each `[FUTURE]`, each requiring its own analysis before
 code):
@@ -890,10 +905,10 @@ generator. Behave accordingly.
    domain layer is refused outright.
 7. **Money rules are absolute** (§8). Integer pence, explicit rounding,
    no floats, no currency mixing.
-8. **Tests are part of the change, not a follow-up.** New behaviour ships
-   with tests; bugs ship with regression tests first; repositories ship with
-   tenant-isolation tests. Report test results honestly — a failing test is
-   reported as failing, with output.
+8. **Validation follows risk.** High-risk domain, parser, repository,
+   security, and privacy behaviour ships with focused automated evidence.
+   Low-risk changes may use targeted or visual validation. Run broader suites
+   when they buy confidence, not by reflex. Report every result honestly.
 9. **Think, then code; explain trade-offs.** For any non-trivial decision,
    state the alternatives and why you chose — in the PR/commit body or the
    docs. "It works" is not a rationale.
@@ -901,22 +916,29 @@ generator. Behave accordingly.
     has explicitly mandated this. If a request breaks free-forever,
     determinism, security posture, or maintainability, say so, propose the
     better path, and only proceed on informed confirmation.
-11. **Favour long-term maintainability over demonstration speed.** Nothing
-    here is a demo. Prefer boring, verified, evidenced engineering.
+11. **Favour durable momentum.** Prefer simple, maintainable implementation,
+    but do not let speculative perfection, exhaustive testing, or process
+    ceremony block a safe, reversible improvement.
 12. **Keep the constitution alive.** When you take a decision of ADR weight,
     add it to the ADR table and, if it changes law, amend this file in the
     same commit. When you complete a phase, update §17 and the README status.
     An out-of-date constitution is how architectural consistency dies —
     leaving it stale is itself a violation.
-13. **Respect the phased process.** The product owner approves phase
-    transitions. Deliver a phase completely (tests green, docs updated),
-    report honestly, and stop for approval rather than sprawling forward.
+13. **Use autonomous judgement.** Within the requested scope, make reasonable,
+    reversible decisions and keep moving. Explain material trade-offs in the
+    commit or docs; do not stop for permission on ordinary implementation
+    details.
 14. **Verify, don't assume.** Free-tier limits, statutory figures, external
     API behaviours — check them when they're load-bearing, and record
     provenance (URL + date) when you do. This project's seeds and cost
     tables carry "verified on" notes for a reason.
+15. **Ask when real evidence or authority is missing.** Pause for a genuine
+    sample, credential, external account choice, destructive operation, or
+    irreversible product decision when guessing would materially change the
+    result. State exactly what is needed, then continue as soon as it arrives.
 
 ---
 
-_Constitution v1.0 — established 2026-07-09, at the close of Phase 5.
+_Constitution v1.1 — established 2026-07-09 and amended 2026-07-14 with
+product-owner approval for risk-based validation and greater agent autonomy.
 Amend deliberately; never drift._

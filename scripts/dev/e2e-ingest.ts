@@ -10,7 +10,7 @@ import { isoDate } from '@/core/dates/iso-date';
 
 async function main() {
   const db = new PrismaClient();
-  const email = 'piyushjainsanjay@gmail.com';
+  const email = process.env.DEV_AUTH_EMAIL ?? 'e2e@example.test';
   const user = await db.user.upsert({ where: { email }, create: { email }, update: {} });
   const repos = createTenantRepositories(db, { userId: user.id });
   let employers = await repos.employers.list();

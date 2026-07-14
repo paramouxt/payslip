@@ -24,6 +24,9 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/payslip_test
       DIRECT_URL: postgresql://postgres:postgres@localhost:5432/payslip_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/payslip_test
+      DEV_AUTH_EMAIL: e2e@example.test
+      AUTH_SECRET: ci-only-auth-secret-that-is-long-enough-and-never-used-in-production
+      APP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     steps:
       - uses: actions/checkout@v4
 
@@ -54,3 +57,12 @@ jobs:
 
       - name: Test (unit + integration)
         run: pnpm test
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E accessibility smoke
+        run: pnpm e2e
