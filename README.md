@@ -11,8 +11,8 @@ flags payroll mistakes — live, with £0/month running costs for a single user.
 > push → archive → classify → quarantine/parse → shifts → payroll engine →
 > expected pay → payslip reconciliation → discrepancies → notifications.
 > Outstanding: Tracsis parser v1 (needs sample emails), E2E/axe suite, Sentry,
-> the production deploy itself (`docs/deployment.md`), and gov.uk verification
-> of statutory seeds. Constitution: `CLAUDE.md`.
+> and the production deploy itself (`docs/deployment.md`). Statutory seeds
+> verified against gov.uk (2026-07-13). Constitution: `CLAUDE.md`.
 
 ## Getting started
 

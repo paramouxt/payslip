@@ -56,7 +56,7 @@ is called done.
 Phase 7's Tracsis parser is v0 (quarantine-everything) pending sample emails;
 Phase 11 has property tests but E2E+axe outstanding; Phase 12 has config +
 runbook (`docs/deployment.md`) but Sentry wiring and the production deploy
-itself outstanding. Statutory seeds still carry "VERIFY against gov.uk".**
+itself outstanding. Statutory seeds verified against gov.uk 2026-07-13.**
 
 ---
 
@@ -357,8 +357,10 @@ session must not break.
   is zero-deductions with an explanation node saying why — never a guess.
 - **StatutoryConfig** — global reference data per (jurisdiction, taxYear):
   bands, thresholds, NI category tables, loan plans, with a provenance
-  `source` field. Seeded rows are marked "VERIFY against gov.uk" until
-  Phase 8 sign-off; the engine must surface unverified provenance.
+  `source` field the engine surfaces. GB 2025-26 and 2026-27 verified against
+  gov.uk 2026-07-13 (URLs recorded per row; the check corrected the 2026-27
+  NI LEL and student-loan thresholds). New seed rows must carry verified,
+  dated provenance before any engine consumes them.
 - **Holiday policy** — deliberately _not_ a separate entity today: rolled-up
   holiday is a rate component (`HOLIDAY_ROLLED_UP`), because that is how the
   evidenced employer pays it. Accrued-leave models `[FUTURE]` will justify a
