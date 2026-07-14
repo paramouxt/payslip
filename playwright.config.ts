@@ -15,7 +15,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: `pnpm dev -- --hostname 127.0.0.1 --port ${port.toString()}`,
+    command: `pnpm exec next dev --hostname 127.0.0.1 --port ${port.toString()}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
