@@ -15,6 +15,7 @@ export interface EmployerSummary {
   slug: string;
   currency: string;
   jurisdiction: string;
+  hasPayslipPdfPassword: boolean;
 }
 
 export interface LoadedEmployerConfig {
@@ -23,6 +24,7 @@ export interface LoadedEmployerConfig {
   roleIdsBySlug: Record<string, string>;
   rateClassIdsBySlug: Record<string, string>;
   activeRuleSetVersion: number | null;
+  payslipPdfPasswordEncrypted: string | null;
 }
 
 export interface EmployerRepository {
@@ -30,6 +32,7 @@ export interface EmployerRepository {
   createFromConfig(config: EmployerConfig): Promise<{ employerId: string }>;
   getConfig(employerId: string): Promise<LoadedEmployerConfig | null>;
   list(): Promise<EmployerSummary[]>;
+  setPayslipPdfPasswordEncrypted(employerId: string, encrypted: string): Promise<void>;
 }
 
 export interface ContractRecord {

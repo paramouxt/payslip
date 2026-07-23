@@ -129,7 +129,13 @@ function parseConfirmationOfWork(input: RotaParseInput): RotaParseOutcome {
     return refuse(`TOTAL_MISMATCH: stated ${totalH}:${totalM}, shifts sum ${String(summed / 60)}h`);
   }
 
-  return { ok: true, shifts, confidence: 1 };
+  return {
+    ok: true,
+    shifts,
+    confidence: 1,
+    sourceKind: 'EVENT_CONFIRMATION',
+    authoritativeDates: [],
+  };
 }
 
 /* --------------------------------- Grid ---------------------------------- */
@@ -167,8 +173,9 @@ function parseHfsGrid(input: RotaParseInput): RotaParseOutcome {
   const dateRow = rows.find((cells) => cells.filter((c) => toIsoDate(c) !== null).length >= 5);
   if (!dateRow) return refuse('GRID_DATE_HEADER_NOT_FOUND');
   // First cell is the row label; the rest are one date per day column.
-  const dates = dateRow.slice(1).map((c) => toIsoDate(c));
-  if (dates.some((d) => d === null)) return refuse('GRID_DATE_HEADER_MALFORMED');
+  const parsedDates = dateRow.slice(1).map((c) => toIsoDate(c));
+  if (parsedDates.some((d) => d === null)) return refuse('GRID_DATE_HEADER_MALFORMED');
+  const dates = parsedDates.filter((date): date is IsoDate => date !== null);
   const dayCount = dates.length;
   const expectedCells = 1 + dayCount * 2;
 
@@ -209,18 +216,24 @@ function parseHfsGrid(input: RotaParseInput): RotaParseOutcome {
 
   // An empty shift list is a valid outcome: present on the rota, no HFS
   // shifts that week (e.g. on Reserved Parking every day).
-  return { ok: true, shifts, confidence: 1 };
+  return {
+    ok: true,
+    shifts,
+    confidence: 1,
+    sourceKind: 'WEEKLY_GRID',
+    authoritativeDates: dates,
+  };
 }
 
 /* -------------------------------- Parsers -------------------------------- */
 
 export const tracsisRotaParserV1: RotaParser = {
   id: 'tracsis-rota',
-  version: '1.0.0',
+  version: '1.1.0',
   employerSlug: 'tracsis-events',
   parse(input: RotaParseInput): RotaParseOutcome {
     if (/confirmation of work/i.test(input.subject)) return parseConfirmationOfWork(input);
-    if (/rota positions/i.test(input.subject)) return parseHfsGrid(input);
+    if (/rota position(?:s)?/i.test(input.subject)) return parseHfsGrid(input);
     return refuse('UNRECOGNISED_TRACSIS_FORMAT');
   },
 };

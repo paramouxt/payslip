@@ -33,7 +33,15 @@ export interface CandidateShift {
 }
 
 export type RotaParseOutcome =
-  { ok: true; shifts: CandidateShift[]; confidence: number } | { ok: false; reason: string };
+  | {
+      ok: true;
+      shifts: CandidateShift[];
+      confidence: number;
+      sourceKind: 'EVENT_CONFIRMATION' | 'WEEKLY_GRID';
+      /** Dates whose HFS contents are completely restated by a weekly grid. */
+      authoritativeDates: IsoDate[];
+    }
+  | { ok: false; reason: string };
 
 export interface RotaParser {
   readonly id: string;
@@ -54,7 +62,8 @@ export type PayslipLineKind = 'BASE' | 'HOLIDAY';
 /** Employer-labelled earning line, preserving printed arithmetic as evidence. */
 export interface CandidatePayslipLine {
   code: string;
-  roleSlug: string;
+  /** Printed tier is a pay rate class, not proof of the role worked. */
+  rateClassSlug: string;
   kind: PayslipLineKind;
   /** Decimal hours scaled by 100 (for example 7.50 hours is 750). */
   hoursHundredths: number;

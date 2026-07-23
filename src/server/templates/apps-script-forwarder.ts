@@ -72,7 +72,7 @@ function pushMessage_(message) {
       subject: message.getSubject() || '(no subject)',
       fromAddress: extractAddress_(message.getFrom()),
       plaintextBody: truncate_(message.getPlainBody(), 400000),
-      htmlBody: null,
+      htmlBody: truncate_(message.getBody(), 1000000),
       rawMimeBase64: raw.length < budget ? Utilities.base64Encode(raw, Utilities.Charset.UTF_8) : null,
       attachments: attachmentPayload,
     },

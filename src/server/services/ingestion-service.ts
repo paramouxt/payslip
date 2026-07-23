@@ -7,7 +7,7 @@ import type { ParserRegistry } from '@/core/parsing/registry';
 import type { CandidateShift, EmailClassificationKind } from '@/core/parsing/types';
 import { senderPatternSchema } from '@/core/domain/employer/employer-config';
 import { instantFromZoned } from '@/core/dates/zoned';
-import { addDays, compareIsoDates } from '@/core/dates/iso-date';
+import { addDays, compareIsoDates, type IsoDate } from '@/core/dates/iso-date';
 import { periodsBetween, resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
 import {
   PdfTextExtractionError,
@@ -25,6 +25,7 @@ import {
 } from '@/server/repositories';
 import {
   deriveIngestionKey,
+  decryptField,
   hmacSha256Hex,
   ingestionKeyVerificationHash,
   safeEqualHex,
@@ -94,12 +95,47 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       receivedAt: Date;
       roleIdsBySlug: Record<string, string>;
       candidates: CandidateShift[];
+      sourceKind: 'EVENT_CONFIRMATION' | 'WEEKLY_GRID';
+      authoritativeDates: IsoDate[];
     }
-  ): Promise<{ created: number; amended: number; unchanged: number; ambiguous: number }> {
+  ): Promise<{
+    created: number;
+    amended: number;
+    cancelled: number;
+    unchanged: number;
+    stale: number;
+    ambiguous: number;
+    affectedDates: IsoDate[];
+  }> {
     let created = 0;
     let amended = 0;
+    let cancelled = 0;
     let unchanged = 0;
+    let stale = 0;
     let ambiguous = 0;
+    const affectedDates = new Set<IsoDate>();
+    const hfsRoleId = input.roleIdsBySlug['hands-free'] ?? null;
+    const reservedParkingRoleId = input.roleIdsBySlug['reserved-parking'] ?? null;
+
+    const incomingPriority = (roleId: string | null): number =>
+      input.sourceKind === 'WEEKLY_GRID' || roleId === reservedParkingRoleId ? 2 : 1;
+
+    const existingPriority = (
+      externalRef: string | null,
+      roleId: string | null,
+      latest: { sourceEmailId: string | null; actor: string | null }
+    ): number => {
+      if (latest.actor === 'user') return 3;
+      if (externalRef?.startsWith('hfs-grid:')) return 2;
+      if (externalRef?.startsWith('cow:')) return roleId === reservedParkingRoleId ? 2 : 1;
+      return latest.sourceEmailId ? 1 : 3;
+    };
+
+    const isOlderAtSameAuthority = (
+      incoming: number,
+      existing: number,
+      latestOccurredAt: Date
+    ): boolean => incoming === existing && input.receivedAt < latestOccurredAt;
     for (const candidate of input.candidates) {
       const startAt = instantFromZoned(candidate.date, candidate.startTime, input.timezone);
       let endDate = candidate.date;
@@ -126,25 +162,80 @@ export function createIngestionService(deps: IngestionServiceDeps) {
         sameDay.find((s) => s.snapshot.startAt.getTime() === startAt.getTime());
 
       if (match) {
-        if (match.status === 'CANCELLED') {
-          // The source restates a shift we hold as cancelled: a human must
-          // decide (reinstate vs stale email) — never guess (§11).
+        const history = await repos.shifts.getWithHistory(match.id);
+        const latestEvent = history?.events.at(-1);
+        if (!history || !latestEvent) {
           ambiguous += 1;
           continue;
         }
+
         const sameTimes =
           match.snapshot.startAt.getTime() === startAt.getTime() &&
           match.snapshot.endAt.getTime() === endAt.getTime();
-        if (sameTimes) {
-          unchanged += 1; // idempotent restatement
+        const venue = candidate.venue ?? match.snapshot.venue;
+        const sameDetails =
+          sameTimes &&
+          match.snapshot.externalRef === candidate.externalRef &&
+          match.snapshot.roleId === roleId &&
+          match.snapshot.venue === venue &&
+          match.snapshot.notes === candidate.notes;
+        if (sameDetails && match.status !== 'CANCELLED') {
+          unchanged += 1;
           continue;
         }
-        const { shift, event } = match.amend(
-          { startAt, endAt },
-          { sourceEmailId: input.emailId, occurredAt: input.receivedAt }
+
+        const incoming = incomingPriority(roleId);
+        const existing = existingPriority(
+          match.snapshot.externalRef,
+          match.snapshot.roleId,
+          latestEvent
         );
-        await repos.shifts.applyEvent(shift, event);
+        if (latestEvent.actor === 'user') {
+          ambiguous += 1;
+          continue;
+        }
+        if (
+          incoming < existing ||
+          isOlderAtSameAuthority(incoming, existing, latestEvent.occurredAt)
+        ) {
+          stale += 1;
+          continue;
+        }
+
+        let current = history.shift;
+        if (current.status === 'CANCELLED') {
+          const reinstated = current.reinstate({
+            sourceEmailId: input.emailId,
+            occurredAt: input.receivedAt,
+          });
+          await repos.shifts.applyEvent(reinstated.shift, reinstated.event);
+          current = reinstated.shift;
+        }
+
+        const changes = {
+          externalRef: candidate.externalRef,
+          startAt,
+          endAt,
+          roleId,
+          venue,
+          notes: candidate.notes,
+        };
+        const currentDetailsMatch =
+          current.snapshot.externalRef === changes.externalRef &&
+          current.snapshot.startAt.getTime() === changes.startAt.getTime() &&
+          current.snapshot.endAt.getTime() === changes.endAt.getTime() &&
+          current.snapshot.roleId === changes.roleId &&
+          current.snapshot.venue === changes.venue &&
+          current.snapshot.notes === changes.notes;
+        if (!currentDetailsMatch) {
+          const changed = current.amend(changes, {
+            sourceEmailId: input.emailId,
+            occurredAt: input.receivedAt,
+          });
+          await repos.shifts.applyEvent(changed.shift, changed.event);
+        }
         amended += 1;
+        affectedDates.add(candidate.date);
         continue;
       }
 
@@ -169,8 +260,74 @@ export function createIngestionService(deps: IngestionServiceDeps) {
       });
       await repos.shifts.create(shift, event);
       created += 1;
+      affectedDates.add(candidate.date);
     }
-    return { created, amended, unchanged, ambiguous };
+
+    if (input.sourceKind === 'WEEKLY_GRID' && hfsRoleId) {
+      const representedDates = new Set(
+        input.candidates
+          .filter((candidate) => candidate.roleSlug === 'hands-free')
+          .map((candidate) => candidate.date)
+      );
+      for (const date of input.authoritativeDates) {
+        if (representedDates.has(date)) continue;
+        const sameDay = await repos.shifts.listBetween(date, date, {
+          employerId: input.employerId,
+        });
+        for (const existingShift of sameDay) {
+          if (
+            existingShift.status === 'CANCELLED' ||
+            existingShift.snapshot.roleId !== hfsRoleId ||
+            !(
+              existingShift.snapshot.externalRef?.startsWith('hfs-grid:') ||
+              existingShift.snapshot.externalRef?.startsWith('cow:')
+            )
+          ) {
+            continue;
+          }
+          const history = await repos.shifts.getWithHistory(existingShift.id);
+          const latestEvent = history?.events.at(-1);
+          if (!history || !latestEvent) {
+            ambiguous += 1;
+            continue;
+          }
+          const incoming = incomingPriority(hfsRoleId);
+          const existing = existingPriority(
+            existingShift.snapshot.externalRef,
+            existingShift.snapshot.roleId,
+            latestEvent
+          );
+          if (latestEvent.actor === 'user') {
+            ambiguous += 1;
+            continue;
+          }
+          if (
+            incoming < existing ||
+            isOlderAtSameAuthority(incoming, existing, latestEvent.occurredAt)
+          ) {
+            stale += 1;
+            continue;
+          }
+          const result = history.shift.cancel({
+            sourceEmailId: input.emailId,
+            occurredAt: input.receivedAt,
+          });
+          await repos.shifts.applyEvent(result.shift, result.event);
+          cancelled += 1;
+          affectedDates.add(date);
+        }
+      }
+    }
+
+    return {
+      created,
+      amended,
+      cancelled,
+      unchanged,
+      stale,
+      ambiguous,
+      affectedDates: [...affectedDates].sort(compareIsoDates),
+    };
   }
 
   return {
@@ -278,6 +435,7 @@ export function createIngestionService(deps: IngestionServiceDeps) {
             scheme: config?.config.payPeriodScheme ?? null,
             rosterNames: config?.config.rosterNames ?? [],
             roleIdsBySlug: config?.roleIdsBySlug ?? {},
+            payslipPdfPasswordEncrypted: config?.payslipPdfPasswordEncrypted ?? null,
           };
         })
       );
@@ -330,12 +488,14 @@ export function createIngestionService(deps: IngestionServiceDeps) {
               receivedAt: email.receivedAt,
               roleIdsBySlug: employer.roleIdsBySlug,
               candidates: outcome.shifts,
+              sourceKind: outcome.sourceKind,
+              authoritativeDates: outcome.authoritativeDates,
             });
             stats.applied = applied;
             parseStatus = applied.ambiguous > 0 ? 'QUARANTINED' : 'PARSED';
             if (applied.ambiguous > 0) stats.reason = 'APPLY_AMBIGUITY';
-            if (employer.scheme && applied.created + applied.amended > 0) {
-              const dates = outcome.shifts.map((s) => s.date).sort(compareIsoDates);
+            if (employer.scheme && applied.created + applied.amended + applied.cancelled > 0) {
+              const dates = applied.affectedDates;
               for (const date of dates) {
                 try {
                   await repos.payrollPeriods.ensure(
@@ -386,8 +546,17 @@ export function createIngestionService(deps: IngestionServiceDeps) {
           if (!pdf) {
             stats.reason = 'PAYSLIP_PDF_NOT_FOUND';
           } else {
+            let passwordDecrypted = false;
             try {
-              const textContent = await documentTextExtractor.extractPdfText(pdf.content);
+              let pdfPassword: string | undefined;
+              if (employer.payslipPdfPasswordEncrypted) {
+                pdfPassword = decryptField(employer.payslipPdfPasswordEncrypted);
+                passwordDecrypted = true;
+              }
+              const textContent = await documentTextExtractor.extractPdfText(
+                pdf.content,
+                pdfPassword ? { password: pdfPassword } : undefined
+              );
               const outcome = parser.parse({
                 filename: pdf.filename,
                 mimeType: pdf.mimeType,
@@ -460,7 +629,11 @@ export function createIngestionService(deps: IngestionServiceDeps) {
               }
             } catch (error) {
               stats.reason =
-                error instanceof PdfTextExtractionError ? error.code : 'PDF_TEXT_EXTRACTION_FAILED';
+                error instanceof PdfTextExtractionError
+                  ? error.code
+                  : employer.payslipPdfPasswordEncrypted && !passwordDecrypted
+                    ? 'PDF_PASSWORD_DECRYPTION_FAILED'
+                    : 'PDF_TEXT_EXTRACTION_FAILED';
             }
           }
         }

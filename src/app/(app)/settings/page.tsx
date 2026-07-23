@@ -6,6 +6,7 @@ import { prisma } from '@/server/db';
 import { createTenantRepositories } from '@/server/repositories';
 import { createMailboxService } from '@/server/services/mailbox-service';
 import { createMailboxConnectionAction, rotateMailboxKeyAction } from '@/app/actions/mailbox';
+import { savePayslipPdfPasswordAction } from '@/app/actions/employers';
 import { saveTaxProfileAction } from '@/app/actions/payslips';
 import { PushSubscribe } from '@/features/push/push-subscribe';
 import { Badge } from '@/components/ui/badge';
@@ -48,14 +49,42 @@ export default async function SettingsPage() {
             <p className="text-sm text-muted-foreground">None yet — onboard from the Dashboard.</p>
           )}
           {employers.map((e) => (
-            <div key={e.id} className="flex items-center justify-between rounded-md border p-3">
-              <div>
-                <p className="text-sm font-medium">{e.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {e.slug} · {e.currency} · {e.jurisdiction}
-                </p>
+            <div key={e.id} className="flex flex-col gap-3 rounded-md border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{e.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {e.slug} · {e.currency} · {e.jurisdiction}
+                  </p>
+                </div>
+                <Badge variant={e.hasPayslipPdfPassword ? 'success' : 'default'}>
+                  PDF password {e.hasPayslipPdfPassword ? 'saved' : 'not saved'}
+                </Badge>
               </div>
-              <Badge variant="success">configured</Badge>
+              <form action={savePayslipPdfPasswordAction} className="flex items-end gap-3">
+                <input type="hidden" name="employerId" value={e.id} />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor={`payslip-password-${e.id}`}>Payslip PDF password</Label>
+                  <Input
+                    id={`payslip-password-${e.id}`}
+                    name="password"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={
+                      e.hasPayslipPdfPassword ? 'Replace saved password' : 'Enter password'
+                    }
+                    required
+                    maxLength={128}
+                  />
+                </div>
+                <Button type="submit" variant="outline">
+                  {e.hasPayslipPdfPassword ? 'Replace' : 'Save'}
+                </Button>
+              </form>
+              <p className="text-xs text-muted-foreground">
+                Encrypted before storage and used only in memory when opening a payslip attachment.
+                It is never displayed again.
+              </p>
             </div>
           ))}
         </CardContent>

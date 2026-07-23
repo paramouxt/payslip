@@ -43,6 +43,8 @@ describe('tracsis confirmation-of-work parser (v1)', () => {
     if (!outcome.ok) throw new Error(`expected ok, got ${outcome.reason}`);
     expect(outcome.shifts).toHaveLength(9);
     expect(outcome.confidence).toBe(1);
+    expect(outcome.sourceKind).toBe('EVENT_CONFIRMATION');
+    expect(outcome.authoritativeDates).toEqual([]);
     for (const shift of outcome.shifts) {
       expect(shift.roleSlug).toBe('reserved-parking');
       expect(shift.venue).toBe('Bicester Village');
@@ -118,6 +120,16 @@ describe('tracsis HFS grid parser (v1)', () => {
     const outcome = tracsisRotaParserV1.parse(grid(fixture('hfs-grid-revised.html')));
     if (!outcome.ok) throw new Error(`expected ok, got ${outcome.reason}`);
     expect(outcome.shifts).toHaveLength(1);
+    expect(outcome.sourceKind).toBe('WEEKLY_GRID');
+    expect(outcome.authoritativeDates).toEqual([
+      '2026-06-29',
+      '2026-06-30',
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+      '2026-07-04',
+      '2026-07-05',
+    ]);
     expect(outcome.shifts[0]).toMatchObject({
       date: '2026-07-05',
       startTime: '10:00',
@@ -133,6 +145,14 @@ describe('tracsis HFS grid parser (v1)', () => {
     );
     if (!outcome.ok) throw new Error(`expected ok, got ${outcome.reason}`);
     expect(outcome.shifts).toHaveLength(0);
+  });
+
+  it('accepts Bruno-style singular rota position subjects', () => {
+    const outcome = tracsisRotaParserV1.parse({
+      ...grid(fixture('hfs-grid-revised.html')),
+      subject: 'HFS Rota Position - week commencing 29/06/2026',
+    });
+    expect(outcome).toMatchObject({ ok: true, sourceKind: 'WEEKLY_GRID' });
   });
 
   it('refuses when roster names are not configured', () => {

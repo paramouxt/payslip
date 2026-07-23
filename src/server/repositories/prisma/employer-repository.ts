@@ -147,6 +147,7 @@ export function createPrismaEmployerRepository(
         roleIdsBySlug,
         rateClassIdsBySlug,
         activeRuleSetVersion: activeRuleSet?.version ?? null,
+        payslipPdfPasswordEncrypted: row.payslipPdfPasswordEncrypted,
       };
     },
 
@@ -154,9 +155,29 @@ export function createPrismaEmployerRepository(
       const rows = await db.employer.findMany({
         where: { userId },
         orderBy: { name: 'asc' },
-        select: { id: true, name: true, slug: true, currency: true, jurisdiction: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          currency: true,
+          jurisdiction: true,
+          payslipPdfPasswordEncrypted: true,
+        },
       });
-      return rows;
+      return rows.map(({ payslipPdfPasswordEncrypted, ...row }) => ({
+        ...row,
+        hasPayslipPdfPassword: payslipPdfPasswordEncrypted !== null,
+      }));
+    },
+
+    async setPayslipPdfPasswordEncrypted(employerId, encrypted) {
+      const updated = await db.employer.updateMany({
+        where: { id: employerId, userId },
+        data: { payslipPdfPasswordEncrypted: encrypted },
+      });
+      if (updated.count === 0) {
+        throw new DomainError(`employer ${employerId} not found for tenant`, 'INVALID_ARGUMENT');
+      }
     },
   };
 }

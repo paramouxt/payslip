@@ -66,7 +66,7 @@ describe('Tracsis payslip parser v1', () => {
       ytd: { grossPence: expected.ytdGrossPence },
     });
     expect(outcome.payslip.lines).toHaveLength(4);
-    expect(outcome.payslip.lines.map((line) => [line.roleSlug, line.kind])).toEqual([
+    expect(outcome.payslip.lines.map((line) => [line.rateClassSlug, line.kind])).toEqual([
       ['hands-free', 'BASE'],
       ['reserved-parking', 'BASE'],
       ['hands-free', 'HOLIDAY'],

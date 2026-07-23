@@ -11,7 +11,7 @@ import { noopRealtimePublisher } from '@/server/integrations/realtime/publisher'
 import { createIngestionService } from '@/server/services/ingestion-service';
 import { createMailboxService } from '@/server/services/mailbox-service';
 import { createTenantRepositories, type TenantRepositories } from '@/server/repositories';
-import { deriveIngestionKey, hmacSha256Hex } from '@/server/security/crypto';
+import { deriveIngestionKey, encryptField, hmacSha256Hex } from '@/server/security/crypto';
 import { buildTracsisEmployerTemplate } from '@/server/templates/tracsis';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -37,6 +37,8 @@ describe.skipIf(!url)('ingestion pipeline (Postgres)', () => {
         return {
           ok: true,
           confidence: 1,
+          sourceKind: 'EVENT_CONFIRMATION',
+          authoritativeDates: [],
           shifts: body.shifts as never,
         };
       } catch {
@@ -264,14 +266,17 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
   const fixture = (name: string): string =>
     readFileSync(path.join(process.cwd(), 'tests', 'fixtures', 'tracsis', name), 'utf8');
 
-  function makeService() {
+  function makeService(onPdfPassword?: (password: string | undefined) => void) {
     return createIngestionService({
       db,
       storage,
       realtime: noopRealtimePublisher,
       registry: buildDefaultParserRegistry(),
       documentTextExtractor: {
-        extractPdfText: () => Promise.resolve(fixture('payslip-period-13.txt')),
+        extractPdfText: (_content, options) => {
+          onPdfPassword?.(options?.password);
+          return Promise.resolve(fixture('payslip-period-13.txt'));
+        },
       },
     });
   }
@@ -455,11 +460,40 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
       employerId,
     });
     expect(sunday).toHaveLength(1);
-    expect(sunday[0]!.version).toBe(1);
+    expect(sunday[0]!.version).toBe(2);
+    expect(sunday[0]!.snapshot.externalRef).toBe('hfs-grid:2026-07-05');
+  });
+
+  it('the latest weekly grid cancels an HFS shift removed from the self row', async () => {
+    const service = makeService();
+    const withoutSunday = fixture('hfs-grid-revised.html').replace(
+      '<td>10:00</td>\n        <td>19:00</td>\n      </tr>\n      <tr>\n        <td>Morgan Reid</td>',
+      '<td></td>\n        <td></td>\n      </tr>\n      <tr>\n        <td>Morgan Reid</td>'
+    );
+    const result = await service.receivePush(
+      signedPush(
+        tracsisEmail({
+          subject: 'HFS Rota Position - week commencing 29/06/2026 REVISED',
+          fromAddress: 'site.manager@tracsis.com',
+          htmlBody: withoutSunday,
+        })
+      )
+    );
+    expect(result).toMatchObject({ status: 'ACCEPTED', parseStatus: 'PARSED' });
+    const sunday = await repos.shifts.listBetween(isoDate('2026-07-05'), isoDate('2026-07-05'), {
+      employerId,
+    });
+    expect(sunday).toHaveLength(1);
+    expect(sunday[0]!.status).toBe('CANCELLED');
   });
 
   it('imports an archived payslip PDF and treats an identical re-forward as idempotent', async () => {
-    const service = makeService();
+    const fixturePassword = 'fixture-password-42';
+    await repos.employers.setPayslipPdfPasswordEncrypted(employerId, encryptField(fixturePassword));
+    let openedWithPassword: string | undefined;
+    const service = makeService((password) => {
+      openedWithPassword = password;
+    });
     const payslipEmail = () => ({
       connectionId,
       message: {
@@ -485,6 +519,7 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
       classification: 'PAYSLIP',
       parseStatus: 'PARSED',
     });
+    expect(openedWithPassword).toBe(fixturePassword);
 
     const payslips = await repos.payslips.list();
     expect(payslips).toHaveLength(1);

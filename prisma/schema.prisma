@@ -33,23 +33,23 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts            Account[]
-  sessions            Session[]
-  taxProfiles         TaxProfile[]
-  employers           Employer[]
-  contracts           Contract[]
-  mailboxConnections  MailboxConnection[]
-  emailMessages       EmailMessage[]
-  ingestionRuns       IngestionRun[]
-  shifts              Shift[]
-  shiftEvents         ShiftEvent[]
-  payrollPeriods      PayrollPeriod[]
-  expectedPays        ExpectedPay[]
-  payslips            Payslip[]
-  discrepancies       Discrepancy[]
-  evidencePacks       EvidencePack[]
-  notifications       Notification[]
-  pushSubscriptions   PushSubscription[]
+  accounts           Account[]
+  sessions           Session[]
+  taxProfiles        TaxProfile[]
+  employers          Employer[]
+  contracts          Contract[]
+  mailboxConnections MailboxConnection[]
+  emailMessages      EmailMessage[]
+  ingestionRuns      IngestionRun[]
+  shifts             Shift[]
+  shiftEvents        ShiftEvent[]
+  payrollPeriods     PayrollPeriod[]
+  expectedPays       ExpectedPay[]
+  payslips           Payslip[]
+  discrepancies      Discrepancy[]
+  evidencePacks      EvidencePack[]
+  notifications      Notification[]
+  pushSubscriptions  PushSubscription[]
 }
 
 // Auth.js (next-auth) adapter tables — kept apart from domain tables.
@@ -122,19 +122,20 @@ enum TaxBasis {
 // ────────────────────────────────────────────────────────────────────────────
 
 model Employer {
-  id              String   @id @default(cuid())
-  userId          String
-  name            String
-  slug            String
-  timezone        String // IANA, e.g. "Europe/London"
-  currency        String // ISO 4217, e.g. "GBP"
-  jurisdiction    String // ISO 3166-1 alpha-2, e.g. "GB"
-  payPeriodScheme Json // PayPeriodScheme document (core/domain/payroll-period)
-  roundingPolicy  Json // per-component rounding rules
-  senderPatterns  Json     @default("[]") // classifier hints: sender/subject patterns
-  rosterNames     Json     @default("[]") // names this person goes by on team-wide rota grids
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                          String   @id @default(cuid())
+  userId                      String
+  name                        String
+  slug                        String
+  timezone                    String // IANA, e.g. "Europe/London"
+  currency                    String // ISO 4217, e.g. "GBP"
+  jurisdiction                String // ISO 3166-1 alpha-2, e.g. "GB"
+  payPeriodScheme             Json // PayPeriodScheme document (core/domain/payroll-period)
+  roundingPolicy              Json // per-component rounding rules
+  senderPatterns              Json     @default("[]") // classifier hints: sender/subject patterns
+  rosterNames                 Json     @default("[]") // names this person goes by on team-wide rota grids
+  payslipPdfPasswordEncrypted String? // AES-256-GCM; decrypted only while opening an attached PDF
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   contracts      Contract[]
@@ -383,11 +384,11 @@ model Shift {
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
-  user              User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employer          Employer   @relation(fields: [employerId], references: [id], onDelete: Cascade)
-  contract          Contract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  role              Role?      @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  rateClassOverride RateClass? @relation(fields: [rateClassOverrideId], references: [id], onDelete: SetNull)
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer          Employer     @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  contract          Contract     @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  role              Role?        @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  rateClassOverride RateClass?   @relation(fields: [rateClassOverrideId], references: [id], onDelete: SetNull)
   events            ShiftEvent[]
 
   @@index([userId, date])
@@ -449,8 +450,8 @@ model PayrollPeriod {
   expectedPayDate DateTime @db.Date
   createdAt       DateTime @default(now())
 
-  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  employer      Employer      @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employer      Employer       @relation(fields: [employerId], references: [id], onDelete: Cascade)
   expectedPays  ExpectedPay[]
   payslips      Payslip[]
   discrepancies Discrepancy[]

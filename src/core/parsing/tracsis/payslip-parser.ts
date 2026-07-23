@@ -8,7 +8,7 @@ import type {
 } from '../types';
 
 const MONEY = String.raw`(\d[\d,]*\.\d{2})`;
-const ROLE_BY_CODE: Readonly<Record<string, string>> = {
+const RATE_CLASS_BY_CODE: Readonly<Record<string, string>> = {
   TIERBV2H: 'hands-free',
   TIERBV4H: 'reserved-parking',
 };
@@ -52,7 +52,7 @@ function parseLines(text: string): CandidatePayslipLine[] | null {
   const seenCodes = [...text.matchAll(/\b(TIERBV[A-Z0-9]+)\s+(?:Wage|HP)\b/gi)].map(
     (match) => match[1]?.toUpperCase() ?? ''
   );
-  if (seenCodes.some((code) => !ROLE_BY_CODE[code])) return null;
+  if (seenCodes.some((code) => !RATE_CLASS_BY_CODE[code])) return null;
 
   const linePattern = new RegExp(
     `\\b(TIERBV(?:2H|4H))\\s+(Wage|HP)\\s+(\\d+\\.\\d{2})\\s+${MONEY}\\s+${MONEY}\\b`,
@@ -65,11 +65,11 @@ function parseLines(text: string): CandidatePayslipLine[] | null {
     const hours = match[3];
     const rate = match[4];
     const amount = match[5];
-    const roleSlug = ROLE_BY_CODE[code];
-    if (!hours || !rate || !amount || !roleSlug) return null;
+    const rateClassSlug = RATE_CLASS_BY_CODE[code];
+    if (!hours || !rate || !amount || !rateClassSlug) return null;
     lines.push({
       code,
-      roleSlug,
+      rateClassSlug,
       kind: description === 'HP' ? 'HOLIDAY' : 'BASE',
       hoursHundredths: toHoursHundredths(hours),
       ratePence: toPence(rate),
@@ -167,7 +167,7 @@ function parseCandidate(textContent: string): CandidatePayslip | PayslipParseOut
 
 export const tracsisPayslipParserV1: PayslipParser = {
   id: 'tracsis-payslip',
-  version: '1.0.0',
+  version: '1.1.0',
   employerSlug: 'tracsis-events',
   parse(input: PayslipParseInput): PayslipParseOutcome {
     if (!/\.pdf$/i.test(input.filename) && input.mimeType !== 'application/pdf') {
