@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { isoDate } from '@/core/dates/iso-date';
 import { instantFromZoned } from '@/core/dates/zoned';
@@ -14,6 +14,7 @@ import {
 } from '@/server/repositories';
 import type { PayrollPeriodRecord } from '@/server/repositories/ports';
 import { buildTracsisEmployerTemplate } from '@/server/templates/tracsis';
+import { createPrismaClient } from '@/server/prisma-client';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -33,7 +34,7 @@ describe.skipIf(!url)('payroll service (Postgres)', () => {
   const tz = 'Europe/London';
 
   beforeAll(async () => {
-    db = new PrismaClient({ datasourceUrl: url });
+    db = createPrismaClient(url);
     const user = await db.user.create({ data: { email: `payroll-${randomUUID()}@test.local` } });
     userId = user.id;
     const tenant = { userId };

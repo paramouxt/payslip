@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { ConcurrencyError } from '@/core/errors';
 import { isoDate } from '@/core/dates/iso-date';
 import { resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
 import { Shift } from '@/core/domain/shift/shift';
 import { createTenantRepositories, type TenantRepositories } from '@/server/repositories';
+import { createPrismaClient } from '@/server/prisma-client';
 import { buildTracsisEmployerTemplate } from '@/server/templates/tracsis';
 
 /**
@@ -24,7 +25,7 @@ describe.skipIf(!url)('repositories (Postgres)', () => {
   let contractId: string;
 
   beforeAll(async () => {
-    db = new PrismaClient({ datasourceUrl: url });
+    db = createPrismaClient(url);
     const [a, b] = await Promise.all([
       db.user.create({ data: { email: `alice-${randomUUID()}@test.local` } }),
       db.user.create({ data: { email: `bob-${randomUUID()}@test.local` } }),

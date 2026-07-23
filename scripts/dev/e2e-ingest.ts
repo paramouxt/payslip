@@ -1,15 +1,15 @@
 // Dev tool: creates (or reuses) a mailbox connection and fires a signed push
 // at a running dev server, exactly as the Apps Script forwarder would.
 // Usage: APP_URL=http://localhost:3101 pnpm exec tsx --tsconfig tsconfig.json scripts/dev/e2e-ingest.ts
-import { PrismaClient } from '@prisma/client';
 import { createTenantRepositories } from '@/server/repositories';
+import { createPrismaClient } from '@/server/prisma-client';
 import { createMailboxService } from '@/server/services/mailbox-service';
 import { buildTracsisEmployerTemplate } from '@/server/templates/tracsis';
 import { deriveIngestionKey, hmacSha256Hex } from '@/server/security/crypto';
 import { isoDate } from '@/core/dates/iso-date';
 
 async function main() {
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   const email = process.env.DEV_AUTH_EMAIL ?? 'e2e@example.test';
   const user = await db.user.upsert({ where: { email }, create: { email }, update: {} });
   const repos = createTenantRepositories(db, { userId: user.id });

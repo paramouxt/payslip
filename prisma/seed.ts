@@ -1,6 +1,6 @@
-import { PrismaClient } from '@prisma/client';
 import { isoDate } from '../src/core/dates/iso-date';
 import { createGlobalRepositories } from '../src/server/repositories';
+import { createPrismaClient } from '../src/server/prisma-client';
 
 /**
  * Seeds GLOBAL reference data only: statutory configuration per jurisdiction
@@ -76,7 +76,7 @@ const GB_2026_27 = {
 } as const;
 
 async function main(): Promise<void> {
-  const db = new PrismaClient();
+  const db = createPrismaClient();
   try {
     const { statutoryConfigs } = createGlobalRepositories(db);
 

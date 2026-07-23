@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import { createMailboxService } from '@/server/services/mailbox-service';
 import { createTenantRepositories, type TenantRepositories } from '@/server/repositories';
 import { deriveIngestionKey, encryptField, hmacSha256Hex } from '@/server/security/crypto';
 import { buildTracsisEmployerTemplate } from '@/server/templates/tracsis';
+import { createPrismaClient } from '@/server/prisma-client';
 
 const url = process.env.TEST_DATABASE_URL;
 
@@ -92,7 +93,7 @@ describe.skipIf(!url)('ingestion pipeline (Postgres)', () => {
   }
 
   beforeAll(async () => {
-    db = new PrismaClient({ datasourceUrl: url });
+    db = createPrismaClient(url);
     storage = createMemoryStorage();
     const user = await db.user.create({
       data: { email: `ingest-${randomUUID()}@test.local` },
@@ -316,7 +317,7 @@ describe.skipIf(!url)('tracsis parser v1 through the pipeline (Postgres)', () =>
   }
 
   beforeAll(async () => {
-    db = new PrismaClient({ datasourceUrl: url });
+    db = createPrismaClient(url);
     storage = createMemoryStorage();
     const user = await db.user.create({
       data: { email: `parser-${randomUUID()}@test.local` },
