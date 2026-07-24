@@ -11,4 +11,3 @@ export default new WebAssembly.Module(bytes);
 };
 
 module.exports.raw = true;
-
