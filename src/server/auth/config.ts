@@ -14,7 +14,9 @@ import { env } from '@/lib/env';
  * provider, so the database strategy stays uniform.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // Auth.js publishes its adapter type against the default Node Prisma client.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+  adapter: PrismaAdapter(prisma as unknown as Parameters<typeof PrismaAdapter>[0]),
   session: { strategy: 'database' },
   providers:
     env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET
