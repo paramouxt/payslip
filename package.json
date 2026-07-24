@@ -22,7 +22,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "db:generate": "prisma generate",
+    "db:generate": "prisma generate && node scripts/install-prisma-wasm-package.mjs",
     "db:migrate": "prisma migrate deploy",
     "db:validate": "prisma validate",
     "db:seed": "tsx prisma/seed.ts"

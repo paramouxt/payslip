@@ -19,6 +19,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['@shiftsync/prisma-wasm'],
   headers: () => Promise.resolve([{ source: '/(.*)', headers: securityHeaders }]),
   webpack(config, { isServer }) {
     if (isServer) {
