@@ -1,5 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma/client';
 
 // Prisma's JavaScript engine requires a driver adapter. The fallback URL lets
 // build-time imports initialise without opening a connection; any real query

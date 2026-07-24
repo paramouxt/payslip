@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { ConcurrencyError } from '@/core/errors';
 import type { IsoDate } from '@/core/dates/iso-date';
 import type { Shift, ShiftEventRecord } from '@/core/domain/shift/shift';

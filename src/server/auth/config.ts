@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
+import type { PrismaClient as AdapterPrismaClient } from '@prisma/client';
 import { prisma } from '@/server/db';
 import { env } from '@/lib/env';
 
@@ -14,7 +15,9 @@ import { env } from '@/lib/env';
  * provider, so the database strategy stays uniform.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  // The adapter's published type targets the default Node client; the generated
+  // Cloudflare client implements the same runtime contract.
+  adapter: PrismaAdapter(prisma as unknown as AdapterPrismaClient),
   session: { strategy: 'database' },
   providers:
     env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET

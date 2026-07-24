@@ -11,8 +11,9 @@
 //     schema version travels inside the document
 
 generator client {
-  provider = "prisma-client-js"
-  engineType = "client"
+  provider = "prisma-client"
+  runtime  = "cloudflare"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {

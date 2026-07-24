@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { z } from 'zod';
 import type { PushRequest } from '@/core/ingestion/provider';
 import { classifyEmail } from '@/core/parsing/classifier';

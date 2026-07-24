@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import webPush from 'web-push';
 import { env } from '@/lib/env';
 import { asString } from '@/lib/strings';
