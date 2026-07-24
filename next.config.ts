@@ -1,7 +1,5 @@
-import { cpSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
-import type { webpack } from 'next/dist/compiled/webpack/webpack';
 import withSerwistInit from '@serwist/next';
 import { withSentryConfig } from '@sentry/nextjs';
 
@@ -23,23 +21,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   headers: () => Promise.resolve([{ source: '/(.*)', headers: securityHeaders }]),
   webpack(config, { isServer }) {
-    config.experiments = { ...config.experiments, asyncWebAssembly: true };
-
     if (isServer) {
-      config.output.webassemblyModuleFilename = '../static/wasm/[modulehash].wasm';
-      config.plugins.push({
-        apply(compiler: webpack.Compiler) {
-          compiler.hooks.afterEmit.tap('CopyPrismaWasmForTrace', () => {
-            const outputPath = compiler.options.output.path;
-            if (!outputPath) return;
-
-            const emittedDirectory = resolve(outputPath, '../static/wasm');
-            const tracedDirectory = resolve(outputPath, '../../static/wasm');
-            if (existsSync(emittedDirectory)) {
-              cpSync(emittedDirectory, tracedDirectory, { recursive: true });
-            }
-          });
-        },
+      config.module.rules.push({
+        test: /\.wasm$/,
+        resourceQuery: /module/,
+        type: 'javascript/auto',
+        use: [
+          {
+            loader: resolve('./scripts/inline-wasm-module-loader.cjs'),
+          },
+        ],
       });
     }
 
