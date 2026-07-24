@@ -9,6 +9,8 @@ node_modules/
 # builds & caches
 .next/
 .open-next/
+.sites-bundle/
+.wrangler/
 dist/
 coverage/
 *.tsbuildinfo

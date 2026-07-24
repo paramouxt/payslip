@@ -7,9 +7,24 @@ import { PrismaClient } from '@/generated/prisma/client';
 const UNCONFIGURED_DATABASE_URL =
   'postgresql://shiftsync:shiftsync@127.0.0.1:5432/shiftsync';
 
+function connectionStringForRuntime(connectionString: string): string {
+  if (
+    typeof navigator === 'undefined' ||
+    navigator.userAgent !== 'Cloudflare-Workers'
+  ) {
+    return connectionString;
+  }
+
+  const url = new URL(connectionString);
+  url.searchParams.set('sslmode', 'require');
+  return url.toString();
+}
+
 export function createPrismaClient(connectionString = process.env.DATABASE_URL): PrismaClient {
   const adapter = new PrismaPg({
-    connectionString: connectionString ?? UNCONFIGURED_DATABASE_URL,
+    connectionString: connectionStringForRuntime(
+      connectionString ?? UNCONFIGURED_DATABASE_URL
+    ),
   });
 
   return new PrismaClient({ adapter });
