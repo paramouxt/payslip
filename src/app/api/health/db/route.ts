@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { connect } from 'cloudflare:sockets';
 import { Client } from 'pg';
 import { env } from '@/lib/env';
 import { prisma } from '@/server/db';
@@ -18,6 +19,15 @@ interface ProbeResult {
     message: string;
   };
 }
+interface SocketProbeResult {
+  ok: boolean;
+  elapsedMs: number;
+  tcpOpened: boolean;
+  sslResponse?: string;
+  tlsOpened: boolean;
+  error?: ProbeResult['error'];
+}
+
 
 function safeError(error: unknown): ProbeResult['error'] {
   if (!(error instanceof Error)) {
@@ -86,6 +96,71 @@ async function rawPgProbe(connectionString: string): Promise<ProbeResult> {
   }
 }
 
+async function socketProbe(connectionString: string): Promise<SocketProbeResult> {
+  const startedAt = Date.now();
+  const url = new URL(connectionString);
+  const socket = connect(
+    {
+      hostname: url.hostname,
+      port: Number(url.port || '5432'),
+    },
+    { secureTransport: 'starttls' }
+  );
+  let tcpOpened = false;
+  let tlsOpened = false;
+
+  try {
+    await socket.opened;
+    tcpOpened = true;
+    const writer = socket.writable.getWriter();
+    const reader = socket.readable.getReader();
+
+    await writer.write(new Uint8Array([0, 0, 0, 8, 4, 210, 22, 47]));
+    const first = await reader.read();
+    const sslResponse =
+      !first.done && first.value.length > 0
+        ? String.fromCharCode(first.value[0] ?? 0)
+        : 'EOF';
+
+    if (sslResponse !== 'S') {
+      return {
+        ok: false,
+        elapsedMs: Date.now() - startedAt,
+        tcpOpened,
+        sslResponse,
+        tlsOpened,
+      };
+    }
+
+    writer.releaseLock();
+    reader.releaseLock();
+    const secureSocket = socket.startTls();
+    try {
+      await secureSocket.opened;
+      tlsOpened = true;
+      return {
+        ok: true,
+        elapsedMs: Date.now() - startedAt,
+        tcpOpened,
+        sslResponse,
+        tlsOpened,
+      };
+    } finally {
+      await secureSocket.close().catch(() => undefined);
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      elapsedMs: Date.now() - startedAt,
+      tcpOpened,
+      tlsOpened,
+      error: safeError(error),
+    };
+  } finally {
+    await socket.close().catch(() => undefined);
+  }
+}
+
 async function prismaProbe(): Promise<ProbeResult> {
   const startedAt = Date.now();
   try {
@@ -131,6 +206,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
+  const socket = await socketProbe(connectionString);
   const rawPg = await rawPgProbe(connectionString);
   const prismaResult: ProbeResult = rawPg.ok
     ? await prismaProbe()
@@ -145,6 +221,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     {
       ok,
       config: connectionSummary(connectionString),
+      socket,
       rawPg,
       prisma: prismaResult,
     },
