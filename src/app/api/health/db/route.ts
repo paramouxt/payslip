@@ -28,14 +28,12 @@ interface SocketProbeResult {
   error?: ProbeResult['error'];
 }
 
-
 function safeError(error: unknown): ProbeResult['error'] {
   if (!(error instanceof Error)) {
     return { name: 'UnknownError', message: 'Unknown database error' };
   }
 
-  const code =
-    'code' in error && typeof error.code === 'string' ? error.code : undefined;
+  const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined;
   const message = error.message
     .replace(/postgres(?:ql)?:\/\/\S+/giu, '[redacted-database-url]')
     .slice(0, 300);
@@ -96,10 +94,12 @@ async function rawPgProbe(connectionString: string): Promise<ProbeResult> {
   }
 }
 
-async function socketProbe(connectionString: string): Promise<SocketProbeResult> {
+async function socketProbe(
+  connectionString: string,
+  socketModule: string
+): Promise<SocketProbeResult> {
   const startedAt = Date.now();
   const url = new URL(connectionString);
-  const socketModule = ['cloudflare', 'sockets'].join(':');
   const { connect } = (await import(
     /* webpackIgnore: true */ socketModule
   )) as typeof CloudflareSockets;
@@ -122,9 +122,7 @@ async function socketProbe(connectionString: string): Promise<SocketProbeResult>
     await writer.write(new Uint8Array([0, 0, 0, 8, 4, 210, 22, 47]));
     const first = await reader.read();
     const sslResponse =
-      !first.done && first.value.length > 0
-        ? String.fromCharCode(first.value[0] ?? 0)
-        : 'EOF';
+      !first.done && first.value.length > 0 ? String.fromCharCode(first.value[0] ?? 0) : 'EOF';
 
     if (sslResponse !== 'S') {
       return {
@@ -210,7 +208,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
-  const socket = await socketProbe(connectionString);
+  const socket = await socketProbe(
+    connectionString,
+    request.headers.get('x-db-socket-module') ?? 'cloudflare:sockets'
+  );
   const rawPg = await rawPgProbe(connectionString);
   const prismaResult: ProbeResult = rawPg.ok
     ? await prismaProbe()
