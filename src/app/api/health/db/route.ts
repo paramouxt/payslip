@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type * as CloudflareSockets from 'cloudflare:sockets';
 import { Client } from 'pg';
 import { env } from '@/lib/env';
 import { prisma } from '@/server/db';
@@ -98,9 +99,10 @@ async function rawPgProbe(connectionString: string): Promise<ProbeResult> {
 async function socketProbe(connectionString: string): Promise<SocketProbeResult> {
   const startedAt = Date.now();
   const url = new URL(connectionString);
-  const { connect } = await import(
-    /* webpackIgnore: true */ 'cloudflare:sockets'
-  );
+  const socketModule = ['cloudflare', 'sockets'].join(':');
+  const { connect } = (await import(
+    /* webpackIgnore: true */ socketModule
+  )) as typeof CloudflareSockets;
   const socket = connect(
     {
       hostname: url.hostname,
