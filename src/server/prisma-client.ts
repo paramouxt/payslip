@@ -16,7 +16,7 @@ const UNCONFIGURED_DATABASE_URL =
  * one; an explicit `sslmode` is honoured (and fails loudly if wrong) rather
  * than silently overridden.
  */
-function connectionStringForRuntime(connectionString: string): string {
+export function connectionStringForRuntime(connectionString: string): string {
   if (typeof navigator === 'undefined' || navigator.userAgent !== 'Cloudflare-Workers') {
     return connectionString;
   }
