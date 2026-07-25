@@ -25,6 +25,9 @@ interface SocketProbeResult {
   tcpOpened: boolean;
   sslResponse?: string;
   tlsOpened: boolean;
+  startupMessageType?: string;
+  authenticationCode?: number;
+  serverErrorCode?: string;
   error?: ProbeResult['error'];
 }
 
@@ -94,6 +97,86 @@ async function rawPgProbe(connectionString: string): Promise<ProbeResult> {
   }
 }
 
+function postgresStartupMessage(url: URL): Uint8Array {
+  const encoder = new TextEncoder();
+  const nullTerminated = (value: string): Uint8Array => {
+    const encoded = encoder.encode(value);
+    const result = new Uint8Array(encoded.length + 1);
+    result.set(encoded);
+    return result;
+  };
+  const parts = [
+    nullTerminated('user'),
+    nullTerminated(decodeURIComponent(url.username)),
+    nullTerminated('database'),
+    nullTerminated(decodeURIComponent(url.pathname.slice(1) || 'postgres')),
+    new Uint8Array([0]),
+  ];
+  const length = 8 + parts.reduce((total, part) => total + part.length, 0);
+  const message = new Uint8Array(length);
+  const view = new DataView(message.buffer);
+  view.setUint32(0, length, false);
+  view.setUint32(4, 196_608, false);
+  let offset = 8;
+
+  for (const part of parts) {
+    message.set(part, offset);
+    offset += part.length;
+  }
+
+  return message;
+}
+
+async function readPostgresFrame(
+  reader: ReadableStreamDefaultReader<Uint8Array>
+): Promise<Uint8Array> {
+  let received = new Uint8Array(0);
+  let expectedLength: number | undefined;
+
+  while (expectedLength === undefined || received.length < expectedLength) {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      throw new Error('Database closed before its first protocol response');
+    }
+
+    const combined = new Uint8Array(received.length + chunk.value.length);
+    combined.set(received);
+    combined.set(chunk.value, received.length);
+    received = combined;
+
+    if (expectedLength === undefined && received.length >= 5) {
+      expectedLength =
+        1 +
+        new DataView(received.buffer, received.byteOffset, received.byteLength).getUint32(1, false);
+      if (expectedLength > 65_536) {
+        throw new Error('Database returned an oversized initial protocol frame');
+      }
+    }
+  }
+
+  return received.slice(0, expectedLength);
+}
+
+function postgresErrorCode(frame: Uint8Array): string | undefined {
+  const decoder = new TextDecoder();
+  let offset = 5;
+
+  while (offset < frame.length && frame[offset] !== 0) {
+    const fieldType = String.fromCharCode(frame[offset] ?? 0);
+    offset += 1;
+    let end = offset;
+    while (end < frame.length && frame[end] !== 0) {
+      end += 1;
+    }
+    if (fieldType === 'C') {
+      return decoder.decode(frame.subarray(offset, end));
+    }
+    offset = end + 1;
+  }
+
+  return undefined;
+}
+
 async function socketProbe(
   connectionString: string,
   socketModule: string
@@ -140,12 +223,35 @@ async function socketProbe(
     try {
       await secureSocket.opened;
       tlsOpened = true;
+      const secureWriter = secureSocket.writable.getWriter();
+      const secureReader = secureSocket.readable.getReader();
+      let startupFrame: Uint8Array;
+      try {
+        await secureWriter.write(postgresStartupMessage(url));
+        startupFrame = await readPostgresFrame(secureReader);
+      } finally {
+        secureWriter.releaseLock();
+        secureReader.releaseLock();
+      }
+
+      const startupMessageType = String.fromCharCode(startupFrame[0] ?? 0);
+      const authenticationCode =
+        startupMessageType === 'R' && startupFrame.length >= 9
+          ? new DataView(
+              startupFrame.buffer,
+              startupFrame.byteOffset,
+              startupFrame.byteLength
+            ).getUint32(5, false)
+          : undefined;
       return {
-        ok: true,
+        ok: startupMessageType === 'R',
         elapsedMs: Date.now() - startedAt,
         tcpOpened,
         sslResponse,
         tlsOpened,
+        startupMessageType,
+        ...(authenticationCode === undefined ? {} : { authenticationCode }),
+        ...(startupMessageType === 'E' ? { serverErrorCode: postgresErrorCode(startupFrame) } : {}),
       };
     } finally {
       await secureSocket.close().catch(() => undefined);
