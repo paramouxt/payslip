@@ -15,7 +15,6 @@ import { env } from '@/lib/env';
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // Auth.js publishes its adapter type against the default Node Prisma client.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   adapter: PrismaAdapter(prisma as unknown as Parameters<typeof PrismaAdapter>[0]),
   session: { strategy: 'database' },
   providers:

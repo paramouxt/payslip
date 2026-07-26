@@ -20,7 +20,13 @@ export default defineConfig(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.mjs', 'postcss.config.mjs'],
+          allowDefaultProject: [
+            'eslint.config.mjs',
+            'postcss.config.mjs',
+            // Plain-JS build scripts: outside tsconfig, still worth linting.
+            'scripts/inline-wasm-module-loader.cjs',
+            'scripts/install-prisma-wasm-package.mjs',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -98,6 +104,16 @@ export default defineConfig(
       'no-console': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
+    },
+  },
+  {
+    // Plain-JS build scripts run in Node, not the browser or the Worker.
+    files: ['scripts/**/*.cjs', 'scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { module: 'writable', require: 'readonly', process: 'readonly', __dirname: 'readonly' },
+    },
+    rules: {
+      'no-console': 'off',
     },
   }
 );
