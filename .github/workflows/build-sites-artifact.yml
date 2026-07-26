@@ -36,6 +36,9 @@ jobs:
       - name: Bundle final worker upload
         run: pnpm exec wrangler deploy --dry-run --outdir .sites-bundle
 
+      - name: Remove debug-only worker source map
+        run: rm -f .sites-bundle/worker.js.map
+
       - name: Upload Sites artifact
         uses: actions/upload-artifact@v4
         with:

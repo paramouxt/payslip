@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import { ConcurrencyError } from '@/core/errors';
 import { isoDate } from '@/core/dates/iso-date';

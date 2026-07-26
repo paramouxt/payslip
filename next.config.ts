@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import type { NextConfig } from 'next';
 import withSerwistInit from '@serwist/next';
 import { withSentryConfig } from '@sentry/nextjs';
@@ -18,7 +19,27 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['@shiftsync/prisma-wasm'],
   headers: () => Promise.resolve([{ source: '/(.*)', headers: securityHeaders }]),
+  // Next types `webpack` loosely (config is `any`), so the parts we touch are
+  // annotated locally to keep this file under the same type-safety rules as
+  // the rest of the codebase.
+  webpack(config: { module: { rules: unknown[] } }, { isServer }: { isServer: boolean }) {
+    if (isServer) {
+      config.module.rules.push({
+        test: /\.wasm$/,
+        resourceQuery: /module/,
+        type: 'javascript/auto',
+        use: [
+          {
+            loader: resolve('./scripts/inline-wasm-module-loader.cjs'),
+          },
+        ],
+      });
+    }
+
+    return config;
+  },
 };
 
 const sentryBuildConfigured = Boolean(

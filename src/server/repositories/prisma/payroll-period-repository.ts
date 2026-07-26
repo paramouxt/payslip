@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import type { TenantContext } from '@/server/tenant';
 import type { PayrollPeriodRecord, PayrollPeriodRepository } from '../ports';
 import { assertEmployerOwned } from './employer-repository';

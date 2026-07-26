@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@/generated/prisma/client';
 import { z } from 'zod';
 import { isoDate, type IsoDate } from '@/core/dates/iso-date';
 import { resolvePeriodFor } from '@/core/domain/payroll-period/scheme';
