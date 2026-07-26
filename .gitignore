@@ -27,3 +27,4 @@ src/generated/
 # OS/editor noise
 .DS_Store
 .dev.vars
+.vercel/`n
